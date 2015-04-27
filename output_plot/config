@@ -1,3 +1,3 @@
 include_path: $(MYDEFSRC)
-output_dir: MyDef
+output_dir: MyDef-output_plot
 module: perl
