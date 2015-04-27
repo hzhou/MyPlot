@@ -1,0 +1,113 @@
+#---------------------------------------- 
+#---- TrueType Font -----
+
+fncode: load_ttf($font, $ttf)
+    $call get_file_in_t, $ttf
+    $font->{ttf}=\$t
+    $call load_ttf_tables
+    &call read_ttf_table, name
+        my ($format, $count, $string_offset)=unpack("S>S>S>", substr($t, $off, 6))
+        $for $i=0:$count
+            my ($id1, $id2, $id3, $id4, $len, $offset)=unpack("S>S>S>S>S>S>", substr($t, $off+6+12*$i, 12))
+            $if $id1==1 
+                my $s=substr($t, $off+$string_offset+$offset, $len)
+                $if $id4==4
+                    $font->{fontname}=$s
+                $elif $id4==6
+                    $font->{BaseFont}="/$s"
+                    last
+
+    my $emsquare
+    &call read_ttf_table, head
+        $emsquare=unpack("S>", substr($t, $off+18, 4));
+        my ($xmin, $ymin, $xmax, $ymax)=unpack("s>s>s>s>", substr($t, $off+36, 8));
+        $font->{xmin}=$xmin
+        $font->{ymin}=$ymin
+        $font->{xmax}=$xmax
+        $font->{ymax}=$ymax
+    my $num_metrics
+    &call read_ttf_table, hhea
+        ($num_metrics)=unpack("S>", substr($t, $off+34, 2))
+        my ($ascent, $descent)=unpack("s>s>", substr($t, $off+4, 4))
+        $font->{ascent}=$ascent
+        $font->{descent}=$descent
+    my @map
+    &call read_ttf_table, cmap
+        my $ncmap=unpack("s>", substr($t, $off+2, 2));
+        $for $i=0:$ncmap
+            my ($platform, $encoding, $offset)=unpack("S>S>I>", substr($t, $off+4+$i*8, 8));
+            my ($format, $length, $lang)=unpack("S>S>S>", substr($t, $off+$offset, 6));
+            $if $format==0
+                $call load_ttf_cmap_0
+                last
+            $elif $format==4
+                $call load_ttf_cmap_4
+                last
+    &call read_ttf_table, hmtx
+        $if $num_metrics==1
+            $font->{isfixed}=1
+            ($font->{width})=unpack("S>", substr($t, $off, 2))
+        $else
+            my @metrics
+            my $start=$font->{start}
+            $for $i=0:$font->{count}
+                my $idx=$map[$i+$start]
+                my $w=unpack("S>", substr($t, $off+$idx*4, 2))
+                # print "width $i, $idx: $w\n"
+                push @metrics, $w
+            $font->{metrics}=\@metrics
+
+subcode: load_ttf_tables
+    my ($num_tables)=unpack("S>", substr($t, 4, 2));
+
+    my %dir;
+    my $pos=12
+    $for $i=0:$num_tables
+	my $tag=substr($t, $pos, 4);
+	my ($offset, $size)=unpack("I>I>", substr($t, $pos+8, 8));
+	$pos+=16;
+	$dir{$tag}={offset=>$offset, size=>$size};
+
+subcode: read_ttf_table(tag)
+    my $tag="$(tag)";
+    $if $dir{$tag}
+	my $off=$dir{$tag}->{offset};
+	my $size=$dir{$tag}->{size};
+	BLOCK
+
+subcode: load_ttf_cmap_0
+    my @map=unpack("C*", substr($t, $pos+$offset+6, 256))
+    my $start=0
+    my $count=256
+    $for $i=0:256
+	$if $map[$i]>0
+	    $start=$i
+	    last
+    $for $i=256:0
+	$if $map[$i]>0
+	    $count=$i-$start+1
+    $font->{start}=$start
+    $font->{count}=$count
+
+subcode: load_ttf_cmap_4
+    $for $i=0:256
+	$map[$i]=0
+    my ($segcount, $searchrange)=unpack("S>S>", substr($t, $off+$offset+6, 4))
+    my @endcodes=unpack("S>*", substr($t, $off+$offset+14, $segcount))
+    my @startcodes=unpack("S>*", substr($t, $off+$offset+14+$segcount+2, $segcount))
+    my @deltas=unpack("S>*", substr($t, $off+$offset+14+$segcount*2+2, $segcount))
+    my @rangeoffsets=unpack("S>*", substr($t, $off+$offset+14+$segcount*3+2, $segcount))
+    $font->{start}=$startcodes[0]
+    $for $i=0:@startcodes
+	$if $startcodes[$i]<256
+	    my $t_off=$off+$offset+14+$segcount*3+2+$i*2+$rangeoffsets[$i]
+	    $font->{count}=$endcodes[$i]-$font->{start}+1
+	    $for $j=$startcodes[$i]:$endcodes[$i]+1
+		$if $j>=256
+		    $font->{count}=$j-$font->{start}
+		    last
+		$if $rangeoffsets[$i]==0
+		    $map[$j]=$j+$deltas[$i]
+		$else
+		    $map[$j]=unpack("S>", substr($t, $t_off+($j-$startcodes[$i])*2, 2))
+

@@ -1,0 +1,51 @@
+#---------------------------------------- 
+include: macros/standard_fonts.def
+include: macros/font_ttf.def
+
+subcode: _autoload
+    $global %font_metrics
+    $call init_standard_font_metrics
+
+fncode: text_width($str, $font, $font_size)
+    #--- parse into code list ------
+    my @codelist
+    &call parse_loop, $str
+        &call if_lex, (([^\\])+)
+            push @codelist, unpack("U*", $1)
+        &call if_lex, \\(\d\di?\d?)
+            push @codelist, oct("0$1")
+        &call if_lex, \\(.)
+            $(for:n in n,r,t,b,f)
+                $case $1 eq '$(n)'
+                    push @codelist, ord("\$(n)")
+                $else
+                    push @codelist, ord($1)
+    # --- add up the widths ----
+    $if $font->{isfixed}
+        return $font->{width}*scalar(@codelist)*$font_size/1000
+    $else
+        my $metrics=$font->{metrics}
+        my $start=$font->{start}
+        my $count=$font->{count}
+        my $sum=0
+        $foreach $c in @codelist
+            $c-=$start
+            $if $c<0 or $c>=$count
+                $sum+=$metrics->[0]
+            $else
+                $sum+=$metrics->[$c]
+        return $sum*$font_size/1000
+
+fncode: encode_utf($t)
+    my @t
+    $for $i=0:length($t)
+        my $c=ord(substr($t, $i, 1))
+        printf "$i: [%x]\n", $c
+        $if $c<=0xffff
+            push @t, sprintf("%04X", $c)
+        $else
+            $c-=0x10000
+            push @t, sprintf("%04X", 0xD800+$c>>10)
+            push @t, sprintf("%04X", 0xDC00+$c&0x3F)
+    return join('', @t)
+        

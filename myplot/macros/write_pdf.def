@@ -1,0 +1,279 @@
+fncode: write_pdf($f)
+    $call process_pdf
+    $call dump_pdf, $f
+#---------------------------------------- 
+#-- @pagelist, @font_list, @xobj_list
+#-- process_page
+#-- process_font
+#---------------------------------------- 
+subcode: process_pdf
+    #--- first round --------------------------
+    my @obj_list
+    my $idx=0
+
+    $idx++
+    my $catalog={index=>$idx, Type=>"Catalog"}
+    $catalog->{keylist}=["Type", "Pages"]
+    push @obj_list, $catalog
+
+    $idx++
+    my $pages={index=>$idx, Type=>"Pages", Count=>scalar(@page_list), }
+    $pages->{keylist}=["Type", "Kids", "Count"]
+    push @obj_list, $pages
+
+    $foreach $page in @page_list
+	$call process_page
+
+    $foreach $font in @font_list
+	$call process_font
+
+    $foreach $xobj in @xobj_list
+	$call process_xobj
+
+    #--- second round --------------------------
+    $catalog->{Pages}="$pages->{index} 0 R"
+
+    my @tlist
+    $foreach $page in @page_list
+	$call process_page_2
+	push @tlist, "$page->{index} 0 R"
+    $pages->{Kids}="[ ".join(' ', @tlist). " ]"
+
+#---------------------------------------- 
+subcode: process_page
+    $idx++
+    $page->{index}=$idx
+    push @obj_list, $page
+    $page->{Type}="Page"
+    $page->{MediaBox}="[ 0 0 $page->{width} $page->{height} ]"
+    $page->{Parent}="$pages->{index} 0 R"
+    $page->{keylist}=["Type", "MediaBox", "Contents", "Resources", "Parent"]
+
+    my $content=$page->{content}
+    my $t=join("\n", @$content)
+    $idx++
+    push @obj_list, {index=>$idx, stream=>$t}
+
+    $page->{Contents}="$idx 0 R"
+
+subcode: process_page_2
+    my $resources={keylist=>["ProcSet", "Font", "XObject"]}
+    $page->{Resources}=$resources
+    $resources->{ProcSet}="[ /PDF /Text /ImageB /ImageC /ImageI ]"
+
+    #---- fonts ------------
+    my $fonts=$page->{fonts}
+    $if @$fonts
+	my @tlist
+	push @tlist, "<<"
+	$foreach $font in @$fonts
+	    push @tlist, "/$font->{Name} $font->{index} 0 R"
+	push @tlist, ">>"
+	$resources->{Font}=join("\n", @tlist)
+
+    #---- XObjects ------------
+    my $xobjs=$page->{xobjs}
+    $if @$xobjs
+	my @tlist
+	push @tlist, "<<"
+	$foreach $xobj in @$xobjs
+	    push @tlist, "/$xobj->{Name} $xobj->{index} 0 R"
+	push @tlist, ">>"
+	$resources->{XObject}=join("\n", @tlist)
+
+
+#---------------------------------------- 
+subcode: process_font
+    $idx++
+    $font->{Type}="Font"
+    $font->{keylist}=["Type", "Subtype", "Name", "BaseFont", "Encoding", "FirstChar", "LastChar", "Widths", "FontDescriptor"]
+    push @obj_list, $font
+    $font->{index}=$idx
+
+    #---- Chinese support --------------
+    $if $font->{BaseFont}=~/Sim(Sun|Hei)/
+	$font->{Subtype}="Type0"
+	$font->{Encoding}="UniGB-UTF16-H"
+	$call process_font_chinese
+    $elif $font->{ttf}
+	$font->{Subtype}="TrueType"
+	$font->{Encoding}="StandardEncoding"
+	$font->{FirstChar}=$font->{start}
+	$font->{LastChar}=$font->{start}+$font->{count}-1
+	my $widths=$font->{metrics}
+	my $t=join(' ', @$widths)
+	$font->{Widths}="[ $t ]"
+	$call process_font_ttf
+    $else
+	$font->{Subtype}="Type1"
+	$font->{Encoding}="StandardEncoding"
+
+    # ------------------------------
+    subcode: process_font_chinese
+        #---- DescendantFonts ----
+        $idx++
+        $font->{DescendantFonts}="[ $idx 0 R ]"
+        push @{$font->{keylist}}, "DescendantFonts"
+        my $font_cid={Type=>"Font", Subtype=>"CIDFontType0", DW=>1000, BaseFont=>$font->{BaseFont}}
+        $font_cid->{DW}=1000
+        $font_cid->{W}="[ 1 95 500 814 907 500 7712 7716 500 ]"
+        $font_cid->{keylist}=["Type", "Subtype", "DW", "BaseFont", "DW2", "W", "FontDescriptor", "CIDSystemInfo"]
+        push @obj_list, $font_cid
+        $font_cid->{index}=$idx
+
+        $font_cid->{CIDSystemInfo}="<< /Registry (Adobe) /Ordering (GB1) /Supplement 0 >>"
+        #---- FontDescriptor: used for font substitution ------
+        $idx++
+        $font_cid->{FontDescriptor}="$idx 0 R"
+        my $font_descriptor={Type=>"FontDescriptor", FontName=>$font->{BaseFont}}
+        $font_descriptor->{Ascent}=859
+        $font_descriptor->{Descent}=-140 
+        $font_descriptor->{CapHeight}=683
+        $font_descriptor->{MissingWidth}=500
+        $font_descriptor->{Flags}=7 
+        $font_descriptor->{FontBBox}="[ 0 -140 996 855 ]" 
+        $font_descriptor->{ItalicAngle}=0 
+        $font_descriptor->{StemV}=78
+
+        $font_descriptor->{keylist}=["Type", "FontName", "Ascent", "Descent", "CapHeight", "XHeight", "MissingWidth", "Flags", "FontBBox", "ItalicAngle", "StemV"]
+        push @obj_list, $font_descriptor
+        $font_descriptor->{index}=$idx
+
+    # ------------------------
+    subcode: process_font_ttf
+        #---- FontDescriptor: used for font substitution ------
+        $idx++
+        $font->{FontDescriptor}="$idx 0 R"
+        my $font_descriptor={Type=>"FontDescriptor", FontName=>$font->{BaseFont}}
+        $font_descriptor->{MissingWidth}=$font->{width}
+        $font_descriptor->{Ascent}=$font->{ascent}
+        $font_descriptor->{Descent}=$font->{descent}
+        $font_descriptor->{CapHeight}=$font->{capheight}
+        $font_descriptor->{XHeight}=$font->{xheight}
+        $font_descriptor->{Flags}=32
+        $font_descriptor->{FontBBox}="[ $font->{xmin} $font->{ymin} $font->{xmax} $font->{ymax} ]" 
+        $font_descriptor->{ItalicAngle}=0 
+        $font_descriptor->{StemV}=0
+
+        $font_descriptor->{keylist}=["Type", "FontName", "Ascent", "Descent", "CapHeight", "XHeight", "MissingWidth", "Flags", "FontBBox", "ItalicAngle", "StemV"]
+        push @obj_list, $font_descriptor
+        $font_descriptor->{index}=$idx
+
+        #---- Embed fontfile ---------
+        $idx++
+        my $r_font=$font->{ttf}
+        my $len=length($$r_font)
+        my $fontfile={Length1=>$len, Length2=>0, Length3=>0, data=>$r_font}
+        $fontfile->{keylist}=["Length", "Length1", "Length2", "Length3"]
+        push @obj_list, $fontfile
+        $fontfile->{index}=$idx
+        $font_descriptor->{FontFile2}="$idx 0 R"
+        push @{$font_descriptor->{keylist}}, "FontFile2"
+
+
+#---------------------------------------- 
+subcode: process_xobj
+    $idx++
+    push @obj_list, $xobj
+    $xobj->{index}=$idx
+    $xobj->{Type}="XObject"
+    $if $xobj->{type} eq "jpeg"
+	$xobj->{Subtype}="Image"
+	$xobj->{Filter}="[ /DCTDecode ]"
+	$xobj->{keylist}=["Length", "Type", "Subtype", "Height", "Width", "ColorSpace", "BitsPerComponent", "Filter"]
+	$if $xobj->{BitsPerComponent}==8
+	    $xobj->{ColorSpace}="DeviceGray"
+	$else
+	    $xobj->{ColorSpace}="DeviceRGB"
+    $elif $xobj->{type} eq "image"
+	my $image=$xobj->{image}
+	$xobj->{Subtype}="Image"
+	$xobj->{keylist}=["Length", "Type", "Subtype", "Height", "Width", "ColorSpace", "BitsPerComponent", "Filter", "Mask"]
+	$xobj->{Width}=$image->{width}
+	$xobj->{Height}=$image->{height}
+	$if $image->{type} eq "rgb"
+	    $xobj->{ColorSpace}="DeviceRGB"
+	    $xobj->{BitsPerComponent}=8
+	$if $image->{Mask}
+	    $xobj->{Mask}=$image->{Mask}
+
+	my $data=pack("C*", @{$image->{data}})
+	use Compress::Zlib
+	$data=Compress::Zlib::compress($data)
+	$xobj->{Filter}="FlateDecode"
+	$xobj->{data}=\$data
+
+#---------------------------------------- 
+subcode: dump_pdf(f)
+    &call open_w, $(f)
+	print Out "\%PDF-1.6\n"
+	$foreach $obj in @obj_list
+	    $obj->{offset}=tell Out
+	    print Out "$obj->{index} 0 obj\n"
+	    $if $obj->{keylist}
+		$call dump_dictionary, $obj
+	    $elif $obj->{stream}
+		$call dump_stream, $obj->{stream}
+	    print Out "endobj\n"
+
+	my $startxref=tell Out
+	print Out "xref\n"
+	print Out "0 $idx\n"
+	printf Out "%010d 65535 f\r\n", 0
+	$foreach $obj in @obj_list
+	    printf Out "%010d %05d n\r\n", $obj->{offset}, 0
+
+	print Out "trailer\n"
+	print Out "<<\n"
+	print Out "/Root 1 0 R\n"
+	print Out "/Size $idx\n"
+	print Out ">>\n"
+	print Out "startxref\n"
+	print Out "$startxref\n"
+	print Out "\%\%EOF"
+
+    # ----------------------------------
+    subcode: dump_dictionary(obj)
+        $if $(obj)->{file}
+            $call get_file_in_t, $(obj)->{file}
+            my $len=length($t)
+            $(obj)->{Length}=$len
+            print Out get_dict_string($(obj))
+            print Out "stream\n"
+            print Out $t, "\n"
+            print Out "endstream\n"
+        $elif $(obj)->{data}
+            my $len=length(${$(obj)->{data}})
+            $(obj)->{Length}=$len
+            print Out get_dict_string($(obj))
+            print Out "stream\n"
+            print Out ${$(obj)->{data}}, "\n"
+            print Out "endstream\n"
+        $else
+            print Out get_dict_string($(obj))
+
+    # ----------------------
+    subcode: dump_stream(obj)
+        print Out "<< /Length ", length($(obj)), " >>\n"
+        print Out "stream\n"
+        print Out $(obj), "\n"
+        print Out "endstream\n"
+
+########################################
+fncode: get_dict_string($dict)
+    my @tlist
+    push @tlist, "<<\n"
+    my $keylist=$dict->{keylist}
+    $foreach $key in @$keylist
+        my $r=$dict->{$key}
+        $if defined $r and !ref($r)
+            $if $r=~/^[A-Z]/
+                push @tlist, "/$key /$r\n"
+            $else
+                push @tlist, "/$key $r\n"
+        $elif ref($r) eq "HASH" && $r->{keylist}
+            push @tlist, "/$key "
+            push @tlist, get_dict_string($r)
+    push @tlist, ">>\n"
+    return join('', @tlist)
+
