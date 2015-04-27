@@ -1,10 +1,10 @@
 include: macros/write_pdf.def
 include: macros/font.def
 
-page: myplot
+page: MyPlot
     output_dir: lib
     type: pm
-    package: myplot
+    package: MyPlot
     subcode: main
 	#---- expose to pdf writer --------
 	$global @page_list, @font_list, @xobj_list

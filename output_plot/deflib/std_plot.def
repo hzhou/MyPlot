@@ -1,7 +1,10 @@
 include: std_perl.def
 
+Macros:
+    PLOT: MyPlot
+
 subcode: basic_frame(@outname)
-    $use myplot
+    $use $(PLOT)
 
     &call open_pdf, "$(outname)"
         $call main2
@@ -16,16 +19,16 @@ subcode: basic_frame(@outname)
 #---- exposed: $page_content
 subcode: newpage
     $global $page_content
-    $page_content=myplot::newpage()
+    $page_content=$(PLOT)::newpage()
 
 subcode: open_pdf(f)
     $(if:f~")
 	$(set:f=$(f:strip))
     &call block
-	myplot::init()
+	$(PLOT)::init()
 	$call newpage
 	BLOCK
-	myplot::write_pdf("$(f)")
+	$(PLOT)::write_pdf("$(f)")
 	print " --> $(f)\n"
 
 #---------------------------------------- 
@@ -77,7 +80,7 @@ subcode: linecolor(@name)
     $call strokecolor, $(name)
 
 subcode: strokecolor(@name)
-    my ($space, $color)=myplot::get_color_statement("$(name)")
+    my ($space, $color)=$(PLOT)::get_color_statement("$(name)")
     $if $space==0
 	push @$page_content, "$color G"
     $elif $space==1
@@ -86,7 +89,7 @@ subcode: strokecolor(@name)
 	push @$page_content, "$color K"
 
 subcode: fillcolor(@name)
-    my ($space, $color)=myplot::get_color_statement("$(name)")
+    my ($space, $color)=$(PLOT)::get_color_statement("$(name)")
     $if $space==0
 	push @$page_content, "$color g"
     $elif $space==1
@@ -184,9 +187,9 @@ subcode: rotate(a)
 subcode: setfont(name, size)
     $global $cur_font, $cur_font_size
     $(if:name~")
-	$cur_font=myplot::find_font($(name))
+	$cur_font=$(PLOT)::find_font($(name))
     $(else)
-	$cur_font=myplot::find_font("$(name)")
+	$cur_font=$(PLOT)::find_font("$(name)")
     $cur_font_size=$(size)
     my $name=$cur_font->{Name}
     push @$page_content, "/$name $cur_font_size Tf"
@@ -225,7 +228,7 @@ subcode: text(@str)
 	$(set:str=$(str:strip))
     $(if:str~utf:)
 	use utf8
-	my $t=myplot::encode_utf("$(str:4:strip)")
+	my $t=$(PLOT)::encode_utf("$(str:4:strip)")
 	push @$page_content, "<$t> Tj"
     $(else)
 	push @$page_content, "($(str)) Tj"
@@ -242,7 +245,7 @@ subcode: text_at(x, y, @str)
 subcode: text_center(x, y, @str)
     $(if:str~")
 	$(set:str=$(str:strip))
-    my $tw=myplot::text_width("$(str)", $cur_font, $cur_font_size)
+    my $tw=$(PLOT)::text_width("$(str)", $cur_font, $cur_font_size)
     $call text_at, $(x)-$tw/2, $(y), $(str)
 
 #---------------------------------------- 
@@ -254,11 +257,11 @@ subcode: jpeg_at(x, y, w, imagefile)
     $if $t=~/JPEG (\d+)x(\d+) \S+ (\d+)-bit/
 	my ($iw, $ih, $bpp) = ($1, $2, $3)
 	&call add_image, $iw, $ih
-	    my $name = myplot::add_jpg("$(imagefile)", $iw, $ih, $bpp)
+	    my $name = $(PLOT)::add_jpg("$(imagefile)", $iw, $ih, $bpp)
 
 subcode: image_at(x, y, w, image)
     &call add_image, $(image)->{width}, $(image)->{height}
-	my $name = myplot::add_image($(image))
+	my $name = $(PLOT)::add_image($(image))
 
 # ----------------
 subcode: add_image(iw, ih)
