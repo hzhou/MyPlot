@@ -1,0 +1,135 @@
+include: macros/write_pdf.def
+include: macros/font.def
+
+page: myplot
+    output_dir: lib
+    type: pm
+    package: myplot
+    subcode: main
+	#---- expose to pdf writer --------
+	$global @page_list, @font_list, @xobj_list
+
+	#---- expose to graphic composer ----
+	$global $page_width, $page_height, $page_margin
+
+	1;
+
+#---------------------------------------- 
+fncode: init
+    @page_list=()
+    @font_list=()
+    @xobj_list=()
+    $call set_page_size, letter
+
+#---- pages ------------------------------------ 
+fncode: newpage
+    $global $page_fonts, %page_font_hash
+    $global $page_xobjs
+
+    my $page={width=>$page_width, height=>$page_height, content=>[], fonts=>[], xobjs=>[]}
+    %page_font_hash=()
+    $page_fonts=$page->{fonts}
+    $page_xobjs=$page->{xobjs}
+    push @page_list, $page
+    return $page->{content}
+
+subcode: update_page_xobjs
+    push @$page_xobjs, $xobj
+
+#---- fonts ------------------------------------ 
+fncode: find_font($title)
+    $call @check_font_hash
+    my $font=$font_hash{$title}
+    $call @update_page_fonts
+
+    my $metric=$font_metrics{$title}
+    $if $metric
+        $foreach $key in "isfixed", "width", "start", "count", "metrics"
+            $if $metric->{$key}
+                $font->{$key}=$metric->{$key}
+    return $font
+
+    # -----------------
+    subcode: check_font_hash
+        $global %font_hash
+        $if !$font_hash{$title}
+            my $n=@font_list
+            $n++
+            my $font={BaseFont=>$title, Name=>"F$n"}
+            $call check_specific_fonts
+            push @font_list, $font
+            $font_hash{$title}=$font
+
+    subcode: update_page_fonts
+        $if !$page_font_hash{$title}
+            push @$page_fonts, $font
+            $page_font_hash{$title}=1
+
+
+subcode:: check_specific_fonts
+    $case $title =~ /Sim(Sun|Hei)/
+	$font->{isfixed}=1
+	$font->{width}=1000
+	$font->{iswide}=1
+
+subcode:: check_specific_fonts
+    $case $title =~/\.ttf$/i
+	load_ttf($font, $title)
+	
+
+#---- XObjects ------------------------------
+fncode: add_jpg($file, $w, $h, $bpp)
+    my $n=@xobj_list
+    $n++
+    my $xobj={type=>"jpeg", file=>$file, Width=>$w, Height=>$h, BitsPerComponent=>$bpp, Name=>"X$n"}
+    push @xobj_list, $xobj
+    $call @update_page_xobjs
+    return "X$n"
+
+fncode: add_image($image)
+    my $n=@xobj_list
+    $n++
+    my $xobj={type=>"image", image=>$image, Name=>"X$n"}
+    push @xobj_list, $xobj
+    $call @update_page_xobjs
+    return "X$n"
+
+
+#---- page dimension ------------------------------------ 
+subcode: set_page_size(name)
+    $global $page_width, $page_height, $page_margin
+    $(if:name=letter)
+	$page_width=612
+	$page_height=792
+	$page_margin=36
+    $(elif:name=A4)
+	$page_width=595
+	$page_height=842
+	$page_margin=36
+    $(elif:name=card)
+	$page_width=5*72
+	$page_height=3*72
+	$page_margin=0.24*72
+    $(elif:name=landscape)
+	$page_width=792
+	$page_height=612
+	$page_margin=36
+    $(else)
+	$page_width=612
+	$page_height=792
+	$page_margin=36
+
+#---- color ------------------------------------ 
+fncode: get_color_statement($name)
+    $global %gray_hash=(white=>1, black=>0)
+    $global %rgb_hash=(red=>"1 0 0", green=>"0 1 0", blue=>"0 0 1")
+
+    $if defined $gray_hash{$name}
+        return (0, $gray_hash{$name})
+    $elif $rgb_hash{$name}
+        return (1, $rgb_hash{$name})
+    $elif $name=~/^(0\.\d+)$/
+        return (0, $1)
+    $elif $name=~/^(0\.\d+)\s+(0\.\d+)\s+(0\.\d+)$/
+        return (1, "$1 $2 $3")
+
