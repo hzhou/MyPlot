@@ -1,0 +1,40 @@
+include: myplot/pdf.def
+
+page: trapezoid
+    subcode: main
+	use myplot
+	&call open_pdf, "t.pdf"
+	    $call linewidth, 2
+	    $call linejoin, 1
+
+	    $call linedash, 0
+	    $call linecolor, red
+	    $call trap, 300, 600, 100, 100, 85
+
+	    $call linedash, 1
+	    $call linecolor, green
+	    $call trap, 300, 600, 104, 100, 85
+
+	    #---------------------------------------- 
+	    $call linedash, 0
+	    $call linecolor, red
+	    $call trap, 300, 400, 100, 100, 85
+
+	    $call linedash, 1
+	    $call linecolor, green
+	    $call trap, 300, 380, 104, 100, 85
+
+subcode: trap(x, y, w, h, a)
+    use Math::Trig
+    my $x0=$(x)
+    my $y0=$(y)
+    my $w0=$(w)/2
+    my $h0=$(h)
+    my $w1=$w0-$h0*cotan($(a)/180.0*3.14159265)
+    $call moveto, $x0-$w0, $y0
+    $call lineto, $x0+$w0, $y0
+    $call lineto, $x0+$w1, $y0+$h0
+    $call lineto, $x0-$w1, $y0+$h0
+    $call lineto, $x0-$w0, $y0
+    $call draw
+

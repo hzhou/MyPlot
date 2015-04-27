@@ -1,0 +1,309 @@
+
+subcode: demo
+    $(if:0)
+        $call font_demo
+
+        $call newpage
+        $call line_demo
+
+        $(for:i in Courier, Helvetica, Times-Roman, Symbol, ZapfDingbats)
+            $call newpage
+            $call demo_encoding, $(i)
+
+        # $call addpage
+        # $call text_demo
+    $(else)
+        # $call chinese_demo
+        # $call image_demo
+        $call ttf_demo
+
+subcode: newpage
+    $global $page_content
+    $page_content=myplot::newpage()
+    $(set:P=myplot::)
+    my $page_left=$$(P)page_margin
+    my $page_bottom=$$(P)page_margin
+    my $page_right=$$(P)page_width-$$(P)page_margin
+    my $page_top=$$(P)page_height-$$(P)page_margin
+    my $page_width=$page_right-$page_left
+    my $page_height=$page_top-$page_bottom
+
+#---------------------------------------- 
+subcode: demo_box(title)
+    $call linewidth, 1
+    $call rect, $page_left, $page_bottom, $page_width, $page_height
+
+    my $page_center_x=$page_left+$page_width/2
+    my $page_padding=30
+    my $page_left2=$page_left+$page_padding
+    my $page_left3=$page_center_x+$page_padding
+    my $page_top2=$page_top-10
+
+    my $page_top3=$page_top2-24
+    $call setfont, "Helvetica", 24
+    $call text_center, $page_center_x, $page_top3, $(title)
+
+
+#---------------------------------------- 
+subcode: font_demo
+    $call demo_box, "Font Demo"
+    $call setfont, "Helvetica", 16
+    $call text_at, $page_left2, $page_top3-16, "<Standard Type1 fonts samples>"
+
+    &call text_block, $page_left2, $page_top3-30
+	$foreach $t in "Courier" , "Courier-Bold" , "Courier-Oblique" , "Courier-BoldOblique" , "Helvetica" , "Helvetica-Bold" , "Helvetica-Oblique" , "Helvetica-BoldOblique" , "Times-Roman" , "Times-Bold" , "Times-Italic" , "Times-BoldItalic" , "Symbol" , "ZapfDingbats"
+	    $call setfont, "Helvetica", 9
+	    $call textline, $t
+	    $call textshift, 0, -9
+	    $call setfont, $t, 20
+	    $call textline, "abcdefgABCDEFG12345!#$%&+-@?"
+
+#---------------------------------------- 
+subcode: chinese_demo
+    $call demo_box, "Chinese Demo"
+    $call setfont, "SimSun", 16
+    $call text_at, $page_left2, $page_top3-30, "utf:周辉, you did it!"
+    $call setfont, "SimHei", 16
+    $call text_at, $page_left2, $page_top3-60, "utf:周辉, you did it again!"
+
+#---------------------------------------- 
+subcode: ttf_demo
+    $call demo_box, "TTF Font Demo"
+    $call setfont, "/media/Temp/Fonts/3ProngTree.TTF", 24
+    $call text_at, $page_left2, $page_top3-30, $cur_font->{fontname}
+
+#---------------------------------------- 
+subcode: image_demo
+    $call demo_box, "Image Demo"
+    # $call jpeg_at, $page_left2, $page_top3-30, 500, /media/tmp/t.jpg
+
+    my @data
+    $for $y=0:400
+	$for $x=0:400
+	    $if sqrt(($x-200)**2+($y-200)**2)>200
+		push @data, 0
+		push @data, 0
+		push @data, 0
+	    $else
+		my $i=(int($y/50)+int($x/50) )%2
+		$if $i
+		    push @data, 200
+		    push @data, 0
+		    push @data, 0
+		$else
+		    push @data, 0
+		    push @data, 0
+		    push @data, 200
+    my $image={data=>\@data, width=>400, height=>400, type=>"rgb"}
+    $image->{Mask}="[ 0 0 0 0 0 0 ]"
+    $call image_at, $page_left2, $page_top3-30, 500, $image
+
+#---------------------------------------- 
+#----------------------------------------
+subcode: line_demo
+    $call demo_box, "Line Demo"
+    $call setfont, "Helvetica", 10
+
+    my $x=$page_left2
+    my $y=$page_top3-15
+    $map demo_linewidth, 0, 1.0, 2.0
+
+    $call linewidth, 1
+    $map demo_linedash, 1, 2, 3
+
+    $call linedash, 0
+    $call linewidth, 30
+    $call linecolor, green
+    $map demo_linecap, 0, 1, 2
+
+    $call linecolor, blue
+    $map demo_linejoin, 0, 1, 2
+
+    my $x=$page_left3
+    my $y=$page_top3-15
+    $call linecolor, black
+    $call linewidth, 2
+    $map demo_rect, stroke, fill, fillstroke, clipstroke
+
+    $y-=10
+    $call setdraw, stroke
+    $call fillcolor, black
+    $map demo_curve, CurveTo2, CurveTo3, CurveTo
+
+subcode: demo_linewidth(lw)
+    $call text_at, $x, $y, "line width = $(lw)"
+    $call linewidth, $(lw)
+    $call moveto, $x, $y-5
+    $call lineto, $x+220, $y-5
+    $call draw
+    $y-=30
+
+subcode: demo_linedash(dash)
+    $call text_at, $x, $y, "line dash = $(dash)"
+    $call linedash, $(dash)
+    $call moveto, $x, $y-5
+    $call lineto, $x+220, $y-5
+    $call draw
+    $y-=30
+
+subcode: demo_linecap(cap)
+    $call text_at, $x, $y, "line cap = $(cap)"
+    $call linecap, $(cap)
+    $call moveto, $x+30, $y-25
+    $call lineto, $x+160, $y-25
+    $call draw
+    $y-=65
+
+subcode: demo_linejoin(join)
+    $call text_at, $x, $y, "line join = $(join)"
+    $call linejoin, $(join)
+    $call moveto, $x+60, $y-60
+    $call lineto, $x+100, $y-20
+    $call lineto, $x+140, $y-60
+    $call draw
+    $y-=105
+
+subcode: demo_rect(type)
+    $call setdraw, $(type)
+    $call fillcolor, black
+    $call text_at, $x, $y, "rect draw type = $(type)"
+    $call fillcolor, red
+    $(if:type=clipstroke)
+	&call save_graphic_state
+	    $call rect, $x, $y-30, 220, 25
+	    $call setfont, "Helvetica", 13
+	    &call text_block, $x-10, $y-10
+		$call textline, "Clip Clip Clip Clip Clip Clip Clip Clip Clip"
+		$call textline, "Clip Clip Clip Clip Clip Clip Clip Clip Clip"
+		$call textline, "Clip Clip Clip Clip Clip Clip Clip Clip Clip"
+    $(else)
+	$call rect, $x, $y-30, 220, 25
+    $y-=50
+
+subcode: demo_curve(type)
+    $call text_at, $x, $y, "$(type)"
+    my $x0=$x+20
+    my $y0=$y-100
+    my $x1=$x0+100
+    my $y1=$y-20
+    my $x2=$x+200
+    $(if:type!=CurveTo)
+	my $y2=$y-60
+    $(else)
+	my $y2=$y-35
+	my $x3=$x+180
+	my $y3=$y-150
+
+    $call text_at, $x0+5, $y0-5, "Current point"
+    $call text_at, $x1+5, $y1-5, "(x1, y1)"
+    $call text_at, $x2+5, $y2-5, "(x2, y2)"
+    $(if:type=CurveTo)
+	$call text_at, $x3+5, $y3-5, "(x3, y3)"
+
+    $call linewidth, 1
+    $call linedash, 1
+    $(if:type=CurveTo2)
+	$call moveto, $x2, $y2
+	$call lineto, $x1, $y1
+    $(elif:type=CurveTo3)
+	$call moveto, $x0, $y0
+	$call lineto, $x1, $y1
+    $(else)
+	$call moveto, $x0, $y0
+	$call lineto, $x1, $y1
+	$call moveto, $x3, $y3
+	$call lineto, $x2, $y2
+    $call draw
+    $call linewidth, 2
+    $call linedash, 0
+    $call moveto, $x0, $y0
+    $(if:type=CurveTo2)
+	$call curveto, $x1, $y1, $x2, $y2, $x2, $y2
+    $(elif:type=CurveTo3)
+	$call curveto, $x1, $y1, $x1, $y1, $x2, $y2
+    $(else)
+	$call curveto, $x1, $y1, $x2, $y2, $x3, $y3
+    $call draw
+
+    $y-=150
+
+#-----------------------------------------
+subcode: text_demo
+    $call print_grid
+
+subcode: print_grid
+    $call linecolor, 0.8
+
+    $for i=0:$page_height:5
+	$if i % 10==0
+	    $call linewidth, 0.5
+	$else
+	    $call linewidth, 0.25
+	$call moveto, 0, i
+	$call lineto, page_width, i
+	$call stroke
+
+	$if i>0 && i%10==0
+	    $call linecolor, 0.5
+	    $call moveto, 0, i
+	    $call lineto, 5, i
+	    $call stroke
+	    $call linecolor, 0.8
+
+    $for i=0:page_width:5
+	$if i % 50==0
+	    $call linewidth, 0.5
+	$else
+	    $call linewidth, 0.25
+	$call moveto, i, 0
+	$call lineto, i, $page_height
+	$call stroke
+
+	$if i>0 && i % 50==0
+	    $call linecolor, 0.5
+	    $call moveto, i, $page_height
+	    $call lineto, i, $page_height-5
+	    $call stroke
+	    $call linecolor, 0.8
+
+    $call fillcolor, 0.5
+    $call setfont, "Helvetica", 5
+    $for i=10:$page_height:10
+	$local string label
+	label.$set i
+	$call text_at, 5, i-2, label
+
+    $for i=50:page_width:50
+	label.$set i
+	$call text_at, i, 5, label
+	$call text_at, i, $page_height-10, label
+
+#---------------------------------------- 
+#---------------------------------------- 
+subcode: demo_encoding(fontname)
+    my $x0=$page_left
+    my $y0=$page_top
+    my $cw=($page_width)/16
+    my $ch=$cw
+    my $font_size=int($ch*0.8)
+    my $y_offset=$ch*0.2
+    $call setfont, $(fontname), $font_size
+    my $metrics=$cur_font->{metrics}
+    my $start=$cur_font->{start}
+    my $count=$cur_font->{count}
+    $if $start+$count>256
+	$count=256-$start
+
+    my $i=0
+    my $y=$y0-$ch+$y_offset
+    $while $i<$count
+	$for $j=0:16
+	    $if $i>=$count
+		break
+	    my $w=$metrics->[$i]*$cur_font_size/1000
+	    my $c=sprintf("\\%o", $i+$start)
+	    $call text_at, $x0+$cw*$j+$cw/2-$w/2, $y, $c
+	    $i++
+	$y-=$ch
+
+

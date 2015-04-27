@@ -1,0 +1,37 @@
+page: get_afm
+    subcode: main
+	my @files=glob("fonts/*.afm")
+	&call open_w, macros_pdf/standard_fonts.def
+	    print Out "subcode: init_standard_font_metrics\n"
+	    $foreach $f in @files
+		$call get_font
+
+subcode: get_font
+    my ($name, $fixed, @widths, $start, $count)
+    $fixed=0
+    $start=32
+    $if $f=~/fonts\/(.*)\.afm/
+	$name=$1
+	my $flag
+	&call open_r, $f
+	    $if /^IsFixedPitch true/
+		$fixed=1
+	    $elif /StartCharMetrics (\d+)/
+		$count=$1
+		$flag="metrics"
+	    $elif /EndCharMetrics/
+		$flag=0
+	    $elif /C\s*(\S+)\s*;\s*WX\s*(\d+)/ and $flag
+		push @widths, $2
+
+	print Out "    \$font_metrics{\"$name\"}="
+	$if $fixed
+	    print Out "{isfixed=>1, width=>$widths[0], start=>$start, count=>$count}\n"
+	$else
+	    print Out "{isfixed=>0, start=>$start, count=>$count, metrics=>["
+	    print Out join(", ", @widths)
+	    print Out "]}\n"
+
+    
+
+
