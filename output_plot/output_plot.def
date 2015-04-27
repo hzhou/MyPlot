@@ -1,0 +1,40 @@
+include: output.def
+include: macros/points.def
+include: macros/path.def
+
+include: macros/expr.def
+include: macros/op.def
+include: macros/equations.def
+
+page: output_plot, inherit, perl
+    output_dir: lib/MyDef
+    package: MyDef::output_plot
+    ext: pl
+
+#---------------------------------------- 
+subcode: on_init
+
+subcode: on_parsecode
+    $if $l=~/CALLBACK\s*(\w+)\s*(.*)/
+        my ($func, $param)=($1, $2)
+        my $codelist=$MyDef::compileutil::named_blocks{"last_grab"}
+        $call @on_callback
+        return 0
+    $elif $l=~/^\$(\w+)\s*(.*)/
+        my ($func, $param)=($1, $2)
+        $call @parse_func
+
+#---------------------------------------- 
+subcode:: parse_func
+    $case $func eq "set_point"
+        return "CALLBACK set_point $param"
+
+subcode:: on_callback
+    $case $func eq "set_point"
+        $call parse_set_point
+
+#---------------------------------------- 
+subcode:: parse_func
+    $case $func eq "draw"
+        parse_path($param)
+        return 0
