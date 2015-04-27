@@ -1,0 +1,273 @@
+include: std_perl.def
+
+subcode: basic_frame(@outname)
+    $use myplot
+
+    &call open_pdf, "$(outname)"
+        $call main2
+
+
+#----------------------------------------
+#- Graphic State
+#-    CTM, clippingpath, colorspace, color, textstate
+#-    linewidth, linecap, linejoin, dashpattern 
+#----------------------------------------
+
+#---- exposed: $page_content
+subcode: newpage
+    $global $page_content
+    $page_content=myplot::newpage()
+
+subcode: open_pdf(f)
+    $(if:f~")
+	$(set:f=$(f:strip))
+    &call block
+	myplot::init()
+	$call newpage
+	BLOCK
+	myplot::write_pdf("$(f)")
+	print " --> $(f)\n"
+
+#---------------------------------------- 
+
+subcode: save_graphic_state
+    push @$page_content, "q"
+    BLOCK
+    push @$page_content, "Q"
+
+#---------------------------------------- 
+subcode: linewidth(w)
+    push @$page_content, "$(w) w"
+
+subcode: linecap(m)
+    #- 0 Butt, 1 Round, 2 Projecting square -----
+    $(if:m=butt or m=0)
+	push @$page_content, "0 J"
+    $(elif:m=round or m=1)
+	push @$page_content, "1 J"
+    $(elif:m=2 or m=3)
+	push @$page_content, "2 J"
+    $(else)
+	push @$page_content, "0 J"
+
+subcode: linejoin(m)
+    #- 0 Miter, 1 Round, 2 Bevel -----
+    $(if:m=miter or m=0)
+	push @$page_content, "0 j"
+    $(elif:m=round or m=1)
+	push @$page_content, "1 j"
+    $(elif:m=bevel or m=2 or m=3)
+	push @$page_content, "2 j"
+    $(else)
+	push @$page_content, "0 j"
+
+subcode: linedash(m)
+    $(if:m=1)
+	push @$page_content, "[3] 0 d"
+    $(elif:m=2)
+	push @$page_content, "[6 3] 0 d"
+    $(elif:m=3)
+	push @$page_content, "[8 7 2 7] 0 d"
+    $(else)
+	#--- 0 solid -----------------
+	push @$page_content, "[] 0 d"
+
+#---------------------------------------- 
+subcode: linecolor(@name)
+    $call strokecolor, $(name)
+
+subcode: strokecolor(@name)
+    my ($space, $color)=myplot::get_color_statement("$(name)")
+    $if $space==0
+	push @$page_content, "$color G"
+    $elif $space==1
+	push @$page_content, "$color RG"
+    $elif $space==2
+	push @$page_content, "$color K"
+
+subcode: fillcolor(@name)
+    my ($space, $color)=myplot::get_color_statement("$(name)")
+    $if $space==0
+	push @$page_content, "$color g"
+    $elif $space==1
+	push @$page_content, "$color rg"
+    $elif $space==2
+	push @$page_content, "$color k"
+
+#---------------------------------------- 
+subcode: moveto(x, y)
+    push @$page_content, join ' ', $(x), $(y), "m"
+
+subcode: lineto(x, y)
+    push @$page_content, join ' ', $(x), $(y), "l"
+
+subcode: curveto(x1, y1, x2, y2, x3, y3)
+    push @$page_content, join ' ', $(x1), $(y1), $(x2), $(y2), $(x3), $(y3), "c"
+
+subcode: closepath
+    push @$page_content, "h"
+
+# ---------------------
+subcode: draw_path
+    $(set:coor=$path[$1]->{x}, $path[$1]->{y})
+    $(set:control=$path[$1]->{"control+x"}, $path[$1]->{"control+y"})
+    my $n=@path
+    $call moveto, $(coor:0)
+    $for $i=1:$n
+        $if $path[$i]->{line}
+            $call lineto, $(coor:$i)
+        $else
+            $call curveto, $(control:$i-1), $(control:$i), $(coor:$i)
+    $if $path[0]->{cycle}
+        $if $path[0]->{line}
+            $call lineto, $(coor:0)
+        $else
+            $call curveto, $(control:$n-1), $(control:0), $(coor:0)
+        $call closepath
+
+#---------------------------------------- 
+subcode: setdraw(draw)
+    $(export:draw)
+
+subcode: draw
+    $(if:draw=stroke)
+	push @$page_content, "S"
+    $(elif:draw=fill)
+	push @$page_content, "f"
+    $(elif:draw=fillstroke)
+	push @$page_content, "B"
+    $(elif:draw=clip)
+	push @$page_content, "W n"
+    $(elif:draw=clipstroke)
+	push @$page_content, "W S"
+    $(else)
+	push @$page_content, "S"
+
+subcode: newpath
+    BLOCK
+    push @$page_content, "S"
+
+subcode: newshape
+    BLOCK
+    $call closepath
+    $call draw
+
+subcode: rect(x, y, w, h)
+    push @$page_content, join " ", $(x), $(y), $(w), $(h), "re"
+    $call draw
+
+subcode: circle(x0, y0, r)
+    &call newshape
+        my $c=0.551915024494*$(r)
+        $call moveto, $(x0), $(y0)+$(r)
+        $call curveto, $(x0)+$c, $(y0)+$(r), $(x0)+$(r), $(y0)+$c, $(x0)+$(r), $(y0)
+        $call curveto, $(x0)+$(r), $(y0)-$c, $(x0)+$c, $(y0)-$(r), $(x0), $(y0)-$(r)
+        $call curveto, $(x0)-$c, $(y0)-$(r), $(x0)-$(r), $(y0)-$c, $(x0)-$(r), $(y0)
+        $call curveto, $(x0)-$(r), $(y0)+$c, $(x0)-$c, $(y0)+$(r), $(x0), $(y0)+$(r)
+    $call draw
+
+#---- Transformation ------------------------------------ 
+subcode: translate(x, y)
+    push @$page_content, join ' ', "1 0 0 1", $(x), $(y), "cm"
+
+subcode: scale(scale)
+    push @$page_content, join ' ', $(scale), "0 0", $(scale), "0 0 cm"
+
+subcode: rotate(a)
+    my $t=$(a)/180.0*3.14159265
+    my $C=cos($t)
+    my $S=sin($t)
+    my $S2=-$S
+    push @$page_content, "$C $S $S2 $C 0 0 cm"
+
+#---- Text ------------------------------------ 
+subcode: setfont(name, size)
+    $global $cur_font, $cur_font_size
+    $(if:name~")
+	$cur_font=myplot::find_font($(name))
+    $(else)
+	$cur_font=myplot::find_font("$(name)")
+    $cur_font_size=$(size)
+    my $name=$cur_font->{Name}
+    push @$page_content, "/$name $cur_font_size Tf"
+
+subcode: setcharspacing(tc)
+    push @$page_content, "$(tc) Tc"
+
+subcode: setwordspacing(tw)
+    push @$page_content, "$(tw) Tw"
+
+subcode: setlinespacing(tl)
+    push @$page_content, "$(tl) TL"
+
+subcode: settextmode(mode)
+    #--- 0 Fill, 1 Stroke, 2 FillStroke, 3 Invisible ----
+    #--- 4 Fill, 5 Stroke, 6 FillStroke, 7 None + Path
+    push @$page_content, "$(mode) Tr"
+
+subcode: settextrise(ts)
+    push @$page_content, "$(ts) Ts"
+
+# --------------------------------------- 
+subcode: text_block(x, y)
+    push @$page_content, "BT"
+    push @$page_content, "$cur_font_size TL"
+    push @$page_content, join ' ', $(x), $(y), "Td"
+    BLOCK
+    push @$page_content, "ET"
+
+subcode: textshift(tx, ty)
+    push @$page_content, join ' ', $(tx), $(ty), "Td"
+
+# -------------
+subcode: text(@str)
+    $(if:str~")
+	$(set:str=$(str:strip))
+    $(if:str~utf:)
+	use utf8
+	my $t=myplot::encode_utf("$(str:4:strip)")
+	push @$page_content, "<$t> Tj"
+    $(else)
+	push @$page_content, "($(str)) Tj"
+
+subcode: textline(@str)
+    $call text, $(str)
+    push @$page_content, "T*"
+    # push @$page_content, "0 -$cur_font_size Td"
+
+subcode: text_at(x, y, @str)
+    &call text_block, $(x), $(y)
+	$call text, $(str)
+
+subcode: text_center(x, y, @str)
+    $(if:str~")
+	$(set:str=$(str:strip))
+    my $tw=myplot::text_width("$(str)", $cur_font, $cur_font_size)
+    $call text_at, $(x)-$tw/2, $(y), $(str)
+
+#---------------------------------------- 
+subcode: jpeg_at(x, y, w, imagefile)
+    $(if:imagefile~")
+	$(set:imagefile=$(imagefile:strip))
+    #/media/tmp/t.jpg JPEG 256x256 256x256+0+0 8-bit PseudoClass 256c 6.7KB 0.000u 0:00.000
+    my $t=`identify $(imagefile)`
+    $if $t=~/JPEG (\d+)x(\d+) \S+ (\d+)-bit/
+	my ($iw, $ih, $bpp) = ($1, $2, $3)
+	&call add_image, $iw, $ih
+	    my $name = myplot::add_jpg("$(imagefile)", $iw, $ih, $bpp)
+
+subcode: image_at(x, y, w, image)
+    &call add_image, $(image)->{width}, $(image)->{height}
+	my $name = myplot::add_image($(image))
+
+# ----------------
+subcode: add_image(iw, ih)
+    my $w=$(w)
+    my $h=$w/$(iw)*$(ih)
+    my $x=$(x)
+    my $y=$(y)-$h
+    BLOCK
+    push @$page_content, "q"
+    push @$page_content, "$w 0 0 $h $x $y cm"
+    push @$page_content, "/$name Do"
+    push @$page_content, "Q"

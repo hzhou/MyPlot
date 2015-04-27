@@ -1,0 +1,14 @@
+page: test, basic_frame, t.pdf
+    DEBUG ON
+    $set_point i=0:6, a=100, origin (300,300)
+        j = i+1
+        xj = i%3 * a
+        yj = i/3 * a
+
+    $call linewidth, 4
+    $call setdraw, stroke
+    $draw z1..z6
+    $draw z3..z4
+    $draw z2..z5
+    $call draw
+

@@ -1,0 +1,226 @@
+macros:
+    type: $1->[1]
+    atom: $1->[0]
+
+#---------------------------------------- 
+fncode: parse_expr($l, $macros1, $macros2)
+    # $print "parse_expr [$l]"
+    $(if:0)
+        $foreach %$macros1
+            $print "  macros1 $k: $v"
+        $foreach %$macros2
+            $print "  macros1 $k: $v"
+    my @stack
+    $call @init
+    $l.=';'
+    &call parse_loop, $l
+        $call @match
+        # print_token($cur)
+        $call @process
+        push @stack, $cur
+    $if @stack!=1
+        my $n=@stack
+        $print "---- dump stack [$n] ----\n"
+        $foreach $t in @stack
+            print_token($t)
+        die "Unreduced expresion.\n"
+    return $stack[0]
+
+    # ------------
+    subcode:: init
+        my %prec=(
+                'eof'=>0,
+                ','=>1, 
+                "+"=>2, "-"=>2, 
+                "*"=>3, "/"=>3, "%"=>3, 
+                "unary"=>4,
+                "num"=>4,
+                "list"=>4,
+                "var"=>4,
+                "name"=>4,
+                "^"=>6,
+                );
+
+    subcode: match
+        my $cur
+        $if $l=~/\G(\s+)/gc
+            next
+        $elif $l=~/\G(\d+(\.\d+)?)/gc
+            $cur = [$1, "num"]
+        $elif $l=~/\G(\d+)\/(\d+)/gc
+            $cur = [$1/$2, "num"]
+        $elif $l=~/\G([ijk])%(\d+)/gc
+            $cur = [$macros2->{$1} % $2, "num"]
+        $elif $l=~/\G([ijk])\/(\d+)/gc
+            use integer
+            $cur = [$macros2->{$1} / $2, "num"]
+        $elif $l=~/\G(\w+)/gc
+            $call @parse_word
+        $elif $l=~/\G([\+\-\*\/,])/gc
+            $cur = [$1, $1]
+        $elif $l=~/\G([\(\[\)\]])/gc
+            $cur = [$1, $1]
+        $elif $l=~/\G;/gc
+            $cur = [undef, "eof"]
+        $else
+            die "parse error: [$l] ".pos($l)."\n"
+
+        # ---
+        subcode: parse_word
+            $if defined $macros1->{$1}
+                $cur = [$macros1->{$1}, "num"]
+            $elif defined $macros2->{$1}
+                $cur = [$macros2->{$1}, "num"]
+            $else
+                my $t=$1
+                my ($pre, $xyz, $tail)=parse_point_name($t, $macros2)
+                $if !$xyz
+                    $cur = [$t, "name"]
+                $elif $xyz eq "z"
+                    my $x = make_var($pre."x".$tail, $macros2)
+                    my $y = make_var($pre."y".$tail, $macros2)
+                    $cur = [[$x, $y], "list"]
+                $else
+                    $cur = make_var($t, $macros2)
+
+    # ------------------------------------------
+    macros:
+        type: $stack[$1]->[1]
+        atom: $stack[$1]->[0]
+        cur_type: $cur->[1]
+
+    subcode:: init
+        my @bracket_stack
+        my %match={'['=>']', '('=>')'}
+
+    subcode: process
+        process:
+        $call check_precedence
+
+        $if $(cur_type) eq "eof"
+            break
+        $elif $(cur_type) eq '[' or $(cur_type) eq '('
+            push @bracket_stack, $match{$(cur_type)}
+        $elif $(cur_type) eq ']' or $(cur_type) eq ')'
+            $call @check_bracket_close
+        $elif $(cur_type) eq '-' and $(type:-1) !~/num|var|list|atom/
+            $cur = ["-", "unary"]
+
+
+        # -------------------
+        subcode: bracket_close
+            $if $(cur_type) ne $bracket_stack[-1]
+                die "Bracket mismatch\n"
+            $elif $match{$(type:-1)} eq $(cur_type)
+                die "Bracket empty\n"
+            $elif $match{$(type:-2)} eq $(cur_type)
+                my $t = pop @stack
+                pop @stack
+                $if $type eq ")"
+                    $cur = $t
+                    goto process
+                $elif $(cur_type) eq "]"
+                    $call process_portion
+                    goto process
+            $else
+                die "Error unreduced bracket\n"
+            # ------------------------
+            subcode: process_portion
+                $if $t->[1] eq "list" and @{$t->[0]}==2
+                    $if $(type:-1) eq "num"
+                        my $t2=pop @stack
+                        $cur = do_portion($t2->[0], @{$t->[0]})
+                    $elif $(atom:-1) eq "-"
+                        pop @stack
+                        $cur = do_portion(-1, @{t->[0]})
+                    $else
+                        die "Error [ ]\n"
+                $else
+                    die "Error [ ]\n"
+
+        # -----------------------
+        subcode: check_precedence
+            $if !defined $prec{$(cur_type)}
+                die "precedence $(cur_type) not specified\n"
+            $(set:cond) join, " and "
+                $(cur_type)!~/num|name|atom/
+                @stack>=2
+                $prec{$(cur_type)} <= $prec{$(type:-2)}
+                ($(type:-1) ne '(' or $(type:-1) ne '[')
+            $while $(cond)
+                reduce_stack(\@stack)
+
+#---------------------------------------- 
+fncode: reduce_stack($stack)
+    my $cur
+    my $t = pop @$stack
+    my $op = pop @$stack
+    # $print "reduce_stack $op->[1], $t->[1]\n"
+    $if $(type:$op) eq "unary"
+        $if $(atom:$op) eq "-"
+            my $t = pop @$stack
+            pop @$stack
+            $cur = do_unary("neg", $t)
+        $else
+            die "Non-supported unary operator\n"
+    $elif $(type:$op) =~/[\+\-\*\/\^]/
+        my $t2 = pop @$stack
+        $cur = do_binary($(type:$op), $t2, $t)
+    $elif $(type:$op) eq "num"
+        $cur = do_binary("*", $op, $t)
+    $elif $(type:$op) eq "name"
+        $cur = do_function($(atom:$op), $t)
+    $else
+        die "not supported operatory type $(type:$op)\n"
+
+    # print_token($t, "    ")
+    push @$stack, $cur
+
+#---------------------------------------- 
+fncode: print_token($t, $pre, $post)
+    $if defined $pre
+        print $pre
+    $if $t->[1] eq "var"
+        print "  ( "
+        $foreach $t2 in @{$t->[0]}
+            print $t2->[1]
+            print $t2->[0]
+            print "  "
+        print ", var )"
+    $else
+        print "  ( $t->[0], $t->[1] )"
+    $if defined $post
+        print $post
+    $else
+        print "\n"
+
+fncode: get_var_string($v)
+    my %t
+    $foreach $t in @{$v->[0]}
+        my ($k, $v)=@$t
+        $if defined $t{$k}
+            $t{$k}+=$v
+        $else
+            $t{$k}=$v
+    my @t=sort {$a cmp $b} keys %t
+
+    my @segs
+    my $const
+    $foreach $k in @t
+        $if $k eq "1"
+            $const=$t{1}
+        $else
+            my $c=$t{$k}
+            $if $c==1
+                push @segs, "\$$k"
+            $elif $c<0
+                push @segs, "($c) * \$$k"
+            $else
+                push @segs, "$c * \$$k"
+    $if defined $const
+        $if $const<0
+            push @segs, "($const)"
+        $else
+            push @segs, $const
+
+    return join(" + ", @segs)

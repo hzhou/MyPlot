@@ -1,0 +1,107 @@
+
+fncode: do_unary($op, $t)
+    $if $op eq "neg"
+        $if $(type:$t) eq "list"
+            $foreach $t2 in @{$(atom:$t)}
+                $t2=do_unary($op, $t2)
+            return $t
+        $elif $(type:$t) eq "num"
+            $(atom:$t)=-$(atom:$t)
+            return $t
+        $elif $(type:$t) eq "name"
+            return make_var($t, -1)
+        $elif $(type:$t) eq "var"
+                my $tlist = $(atom:$t)
+            $foreach $t2 in @{$(atom:$t)}
+                $t2->[1]= - $t2->[1]
+            return $t
+    $else
+        die "non supported unary operator\n"
+
+fncode: do_binary($op, $t1, $t2)
+    $if $(type:$t1) eq "list" and $(type:$t2) eq "list"
+        my $n = @{$(atom:$t1)}
+        my @t
+        $for $i=0:$n
+            push @t, do_binary($op, $(atom:$t1)->[$i], $(atom:$t2)->[$i])
+        return [\@t, "list"]
+    $elif $(type:$t1) eq "num" and $(type:$t2) eq "num"
+        $t1=$(atom:$t1)
+        $t2=$(atom:$t2)
+        $if $op eq "+"
+            return [$t1+$t2, "num"]
+        $elif $op eq "-"
+            return [$t1-$t2, "num"]
+        $elif $op eq "*"
+            return [$t1*$t2, "num"]
+        $elif $op eq "/"
+            return [$t1/$t2, "num"]
+        $elif $op eq "++"
+            return [sqrt($t1*$t1+$t2*$t2), "num"]
+        $elif $op eq "+-+"
+            return [sqrt($t1*$t1-$t2*$t2), "num"]
+        $elif $op eq "^"
+            return [$t1**$t2, "num"]
+        $else
+            die "unsuported binary operator $op\n"
+    $elif $(type:$t2) eq "num"
+        $if $op eq "-"
+            $t2->[0] = -$t2->[0]
+            return do_binary("+", $t2, $t1)
+        $elif $op eq "/"
+            $t2->[0] = 1.0/$t2->[0]
+            return do_binary("*", $t2, $t1)
+        $elif $op eq "+" or $op eq "*"
+            return do_binary($op, $t2, $t1)
+        $else
+            die "unsuported binary $(type:t1) $op num\n"
+    $elif $(type:$t1) eq "num" and $(type:$t2) eq "list"
+        my $n = @{$(atom:$t2)}
+        my @t
+        $for $i=0:$n
+            push @t, do_binary($op, $t1, $(atom:$t2)->[$i])
+        return [\@t, "list"]
+    $elif $(type:$t1) eq "num" and $(type:$t2) eq "name"
+        $if $op eq "*"
+            return make_var($(atom:$t2), $(atom:$t1))
+        $elif $op eq "+"
+            my $t=make_var($(atom:$t2), 1)
+            push @{$t->[0]}, [1, $(atom:$t1)]
+            return $t
+        $elif $op eq "-"
+            my $t=make_var($(atom:$t2), -1)
+            push @{$t->[0]}, [1, $(atom:$t1)]
+            return $t
+        $else
+            die "unsuported binary num $op name\n"
+    $elif $(type:$t1) eq "num" and $(type:$t2) eq "var"
+        # print_token($t1, "  num op var: ")
+        # print_token($t2, "  num op var: ")
+        $if $op eq "*"
+            $foreach $t in @{$(atom:$t2)}
+                $t->[1]*=$(atom:$t1)
+            return $t2
+        $elif $op eq "+"
+            push @{$(atom:$t2)}, [1, $(atom:$t1)]
+            return $t2
+        $elif $op eq "-"
+            $foreach $t in @{$(atom:$t2)}
+                $t->[1] = -$t->[1]
+            push @{$(atom:$t2)}, [1, $(atom:$t1)]
+            return $t2
+        $else
+            die "unsuported binary num $op var\n"
+    $elif $(type:$t1) eq "var" and $(type:$t2) eq "var"
+        $if $op eq "+"
+            $foreach $t in @{$(atom:$t2)}
+                push @{$(atom:$t1)}, $t
+            return $t1
+        $elif $op eq "-"
+            $foreach $t in @{$(atom:$t2)}
+                $t->[1] = -$t->[1]
+                push @{$(atom:$t1)}, $t
+            return $t1
+        $else
+            die "unsuported binary var $op var\n"
+
+

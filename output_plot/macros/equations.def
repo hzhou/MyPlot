@@ -1,0 +1,71 @@
+
+#---- turn name into a var polynomials ----
+
+fncode: make_var($name, $coeff)
+    $if ref($coeff) ne "HASH"
+        return [[[$name, $coeff]], "var"]
+    $elif defined $coeff->{$name}
+        return [$coeff->{$name}, "num"]
+    $else
+        return [[[$name, 1]], "var"]
+
+
+fncode: parse_eqn($left, $right, $macro, $points)
+    # print_token( $left, "-left: ", "; ")
+    # print_token( $right, "-right: ")
+    my $eqn = do_binary("-", $left, $right)
+    # print_token($eqn, "parse_eqn: ")
+    $if $eqn->[1] ne "var"
+        die "equation contains no variable\n"
+
+    $call simpilfy_eqn
+    $if @t==2
+        $call solve_simple
+    $else
+        $call push_eqn
+
+    subcode: simpilfy_eqn
+        my %t
+        $foreach $t in @{$eqn->[0]}
+            my ($k, $v)=@$t
+            $if defined $t{$k}
+                $t{$k}+=$v
+            $else
+                $t{$k}=$v
+        $if !exists $t{1}
+            $t{1}=0
+        my @t=sort {$a cmp $b} keys %t
+
+    subcode: solve_simple
+        my $k=$t[1]
+        my $v=-$t{1}/$t{$k}
+
+        $if defined $macro->{$k}
+            die "variable exist: $k ($macro->{$k} --> $v)\n"
+        $else
+            $macro->{$k}=$v
+            $if $k=~/(\b|_)[xy]/
+                $points->{$k}=$v
+
+    subcode: push_eqn
+        $foreach $k in @t
+            $if $k ne "1" and !exist($eqn_vars{$k})
+                $eqn_vars{$k}=1
+                $n_var++
+        push @eqn_list, \%t
+        $n_eqn++
+
+        $if $n_eqn == $n_var
+            $call @solve_eqns
+            reset_eqns()
+
+    subcode: solve_eqns
+        die "solving linear equations not implemented\n"
+
+
+fncode: reset_eqns
+    $global %eqn_vars, @eqn_list, $n_eqn, $n_var
+    %eqn_vars=()
+    @eqn_list=()
+    $n_eqn=0
+    $n_var=0
