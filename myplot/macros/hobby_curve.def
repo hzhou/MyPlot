@@ -1,2 +1,208 @@
-fncode: solve_curve($path)
+fncode: solve_path($path)
+    $(set:p=$path->[$1]->{"$2"})
+    my $n=$#$path
+    my $N=$n
+    $if $(p:0,cycle)
+        push @$path, $path->[0]
+        push @$path, $path->[1]
+        $N+=2
 
+    $call calc_d_and_psi
+
+    my (@theta)
+    $if $(p:0,cycle)
+        $psi[$N]=$psi[1]
+        $call solve_cycle
+    $else
+        $psi[$N]=0
+        $call solve_open
+
+    $call set_controls
+    $if $(p:0,cycle)
+        $(p:0,x-)=$(p:$n+1,x-)
+        $(p:0,y-)=$(p:$n+1,y-)
+        pop @$path
+        pop @$path
+
+    # ---- open -----------------------------------------
+    # - t0 + u0 t1 = v0
+    # - t1 + u1 t2 = v1
+    # - ...
+    subcode: solve_open
+        my (@u, @v)
+        $call check_ends
+        $call start_open
+        $call build_eqns
+        $call end_open
+
+        # ----------------
+        subcode: check_ends
+            my ($dir0, $dirn)
+            $if defined $(p:0,dx+)
+                $dir0=atan2($(p:0,dy+), $(p:0,dx+))
+            $elif defined $(p:0,x-)
+                $dir0=atan2($(p:0,y)-$(p:0,y-), $(p:0,x)-$(p:0,x-))
+
+            $if defined $(p:$n,dx-)
+                $dirn=atan2($(p:$n,dy-), $(p:$n,dx-))
+            $elif defined $(p:$n,x+)
+                $dirn=atan2($(p:$n,y+)-$(p:$n,y), $(p:$n,x+)-$(p:$n,x))
+
+        subcode: start_open
+            $if defined $dir0
+                $u[0]=0
+                $v[0]=reduce_angle($dir0-atan2($dy[0], $dx[0]))
+            $else 
+                # -: (a0c0+3-b0)t0 + ((3-a0)c0+b1)t1 = -((3-a0)c0+b1)p1
+                $call get_curl, $curl, $(p:0,curl+)
+                $call get_recip, $a, $(p:0,tension+)
+                $call get_recip, $b, $(p:1,tension-)
+                my $c = $a**2*$curl/$b**2
+                $u[0]=((3-$a)*$c+$b) / ($a*$c+3-$b)
+                $v[0]=-$u[0]*$psi[1]
+
+        subcode: end_open
+            $if defined $dirn
+                #-- as if ($dx[$n], $dy[$n]) is the same as ($dx[$n-1], $dy[$n-1])
+                $theta[$n]=reduce_angle($dirn-atan2($dy[$n-1], $dx[$n-1]))
+            $else
+                $call get_curl, $curl, $(p:$n,curl-)
+                $call get_recip, $a, $(p:$n-1,tension+)
+                $call get_recip, $b, $(p:$n,tension-)
+                my $c = $b**2*$curl/$a**2
+                $u[$n] = ($b*$c+3-$a)/((3-$b)*$c+$a)
+                # -  we have: t(n-1) + u(n-1)t(n) = v(n-1)
+                # -  now add: t(n-1) + u(n)  t(n) = 0
+                $theta[$n] = $v[$n-1]/($u[$n-1]-$u[$n])
+
+            $for my $i=$n-1;$i>=0;$i--
+                $theta[$i] = $v[$i]-$u[$i]*$theta[$i+1]
+
+        # ----------------------
+        subcode: get_curl(a, var)
+            my $(a)=1
+            $if defined $(var)
+                $(a)=$(var)
+
+    # ---- cycle ---------------
+    # -: t0 + u0 t1 = v0 + w0 t0
+    # -: t1 + u1 t2 = v1 + w1 t0
+    # -: ...
+    subcode: solve_cycle
+        my (@u, @v, @w)
+        $call start_cycle
+        $(set:cycle=1)
+        $call build_eqns
+        $call end_cycle
+
+        subcode: start_cycle
+            # -: t0 = t0
+            $u[0]=0
+            $v[0]=0
+            $w[0]=1
+        subcode: end_cycle
+            # -: ti + ui t(i+1) = vi + wi t0
+            # add:  t(n+1) = t0     
+            # solve:  ti = a + b t0
+            my $a = 0
+            my $b = 1
+            $for my $i=$n;$i>0;$i--
+                $a = $v[$i] - $a * $u[$i]
+                $b = $w[$i] - $b * $u[$i]
+            # -: t1 = a + b t0
+            # recall: t(n+1) + u(n+1)t(n+2) = v(n+1) + w(n+1) t0
+            # ----->: t0 + u(n+1) t1 = v(n+1) + w(n+1) t0
+            my $t0= ($v[$n+1]-$a*$u[$n+1])/(1-($w[$n+1]-$b*$u[$n+1]))
+            $v[0]=$t0
+            $for $i=1:$n+1
+                $v[$i] += $w[$i]*$t0
+
+            $theta[0]=$t0
+            $theta[$n+1]=$t0
+            $for my $i=$n;$i>0;$i--
+                $theta[$i] = $v[$i]-$u[$i]*$theta[$i+1]
+            $theta[$n+2]=$theta[1]
+
+    # ---------------------------------------- 
+    # ---- common ----
+    subcode: build_eqns
+        $for $i=1:$N
+            $call get_recip, $a0, $(p:$i-1,tension+)
+            $call get_recip, $a1, $(p:$i,tension+)
+            $call get_recip, $b1, $(p:$i,tension-)
+            $call get_recip, $b2, $(p:$i+1,tension-)
+            my $A = $a0/$b1**2/$d[$i-1]
+            my $B = (3-$a0)/$b1**2/$d[$i-1]
+            my $C = (3-$b2)/$a1**2/$d[$i]
+            my $D = $b2/$a1**2/$d[$i]
+
+            my $t = $B-$u[$i-1]*$A+$C
+            $u[$i]=$D/$t
+            $v[$i]=(-$B*$psi[$i]-$D*$psi[$i+1]-$A*$v[$i-1])/$t
+            $(if:cycle)
+                $w[$i]=-$A*$w[$i-1]/$t
+
+    # ----------------------------
+    subcode: calc_d_and_psi
+        my (@dx, @dy, @d, @psi)
+        $for $i=0:$N
+            $dx[$i]=$(p:$i+1,x)-$(p:$i,x)
+            $dy[$i]=$(p:$i+1,y)-$(p:$i,y)
+            $d[$i]=sqrt($dx[$i]**2+$dy[$i]**2)
+        $for $i=1:$N
+            my $t_sin = $dy[$i-1]/$d[$i-1]
+            my $t_cos = $dx[$i-1]/$d[$i-1]
+            #---- now rotate (dx,dy) back alpha to get psi
+            my $x = $dx[$i]*$t_cos + $dy[$i]*$t_sin
+            my $y = -$dx[$i]*$t_sin + $dy[$i]*$t_cos
+            $psi[$i]=atan2($y, $x)
+
+    # ---------------------------
+    subcode: set_controls
+        $for $i=0:$N
+            my $phi = -$psi[$i+1]-$theta[$i+1]
+            $call get_tension
+            $call get_sin_cos
+            $call get_velocity
+            $(p:$i,x+)=$(p:$i,x)+($dx[$i]*$ct-$dy[$i]*$st)*$rho
+            $(p:$i,y+)=$(p:$i,y)+($dx[$i]*$st+$dy[$i]*$ct)*$rho
+            $(p:$i+1,x-)=$(p:$i+1,x)-($dx[$i]*$cf+$dy[$i]*$sf)*$sigma
+            $(p:$i+1,y-)=$(p:$i+1,y)-(-$dx[$i]*$sf+$dy[$i]*$cf)*$sigma
+
+        subcode: get_tension
+            $call get_recip, $a, $(p:$i,tension+)
+            $call get_recip, $b, $(p:$i+1,tension-)
+        subcode: get_sin_cos
+            my $st=sin($theta[$i])
+            my $ct=cos($theta[$i])
+            my $sf=sin($phi)
+            my $cf=cos($phi)
+        subcode: get_velocity
+            $(set:a=1.41421356)
+            $(set:c=0.38196601125)
+            $(set:cc=0.61803398875)
+            my $alpha=$(a)*($st-$sf/16)*($sf-$st/16)*($ct-$cf)
+            my $beta = (1+$(cc)*$ct+$(c)*$cf)
+            my $rho=(2+$alpha)/$beta
+            my $sigma=(2-$alpha)/$beta
+            $rho *= $a/3
+            $sigma *= $b/3
+
+fncode: reduce_angle($t)
+    $if abs($t)>3.14159265
+        $if $t>0
+            $t-=3.14159265*2
+        $else
+            $t+=3.14159265*2
+    return $t
+
+# ----------------------
+subcode: get_curl(a, var)
+    my $(a)=1
+    $if defined $(var)
+        $(a)=$(var)
+
+subcode: get_recip(v, tension)
+    my $(v)=1
+    $if defined $(tension)
+        $(v)=1/$(tension)

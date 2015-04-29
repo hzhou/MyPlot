@@ -1,55 +1,24 @@
-
 fncode: parse_path($param)
-    $call split_path
-    $call parse_plist
-    $call @trivial_case
-    $call solve
+    $call check_cycle
+    $param=~s/--/{curl 1}..{curl 1}/g
 
-    subcode: solve
-        push @$out, "my \@path;\n"
-        $if $has_cycle
-            $plist[0]->{cycle}=1
-        $foreach $t in @plist
-            my @t
-            $foreach $k in sort keys %$t
-                push @t, "\"$k\"=>$t->{$k}"
-            push @$out, "push \@path, {".join(', ', @t)."};\n"
-        push @$out, "myplot::solve_path(\\\@path);\n"
-        MyDef::compileutil::call_sub("draw_path")
-
-    # --------------------
-    subcode: trivial_case
-        $if @plist == 2
-            $if $plist[0]->{"control+x"} && $plist[1]->{"control-x"}
-                my $t="moveto, $plist[0]->{x}, $plist[0]->{y}"
-                MyDef::compileutil::call_sub($t)
-                my $t="curveto, "
-                $t .= $plist[0]->{"control+x"}.", "
-                $t .= $plist[0]->{"control+y"}.", "
-                $t .= $plist[1]->{"control-x"}.", "
-                $t .= $plist[1]->{"control-y"}.", "
-                $t .= "$plist[1]->{x}, $plist[1]->{y}"
-                MyDef::compileutil::call_sub($t)
-                return
-            $elif !$plist[0]->{"dir+x"} && !$plist[1]->{"dir-x"}
-                my $t="moveto, $plist[0]->{x}, $plist[0]->{y}"
-                MyDef::compileutil::call_sub($t)
-                my $t="lineto, $plist[1]->{x}, $plist[1]->{y}"
-                MyDef::compileutil::call_sub($t)
-                return
+    my @segs = split /\s*&\s*/, $param
+    $foreach $s in @segs
+        $call parse
 
     # -----------------
-    subcode: split_path
+    subcode: check_cycle
         my $has_cycle=0
         $if $param=~/\s*\.\.\s*cycle\s*$/
             $has_cycle=1
             $param=$`;
-        $param=~s/--/{curl 1}..{curl 1}/g
-        my @tlist=split /(\.\.(?:(?:tension|controls).*?\.\.)?)/, $param
+
     # ------------------
-    subcode: parse_plist
+    subcode: parse
         my @plist
         my $i=0
+        my $break
+        my @tlist=split /(\.\.(?:(?:tension|controls).*?\.\.)?)/, $s
         $foreach $t in @tlist
             $if $t eq ".."
                 next
@@ -58,74 +27,105 @@ fncode: parse_path($param)
             $elif $t=~/^\.\.controls\s*(.*?)\s*\.\.$/
                 $call do_control
             $else
-                $call get_t1_t2
-                $call do_dir_1
-                $call do_dir_2
-                my ($x, $y)=parse_point($t)
-                $plist[$i]->{x}=$x
-                $plist[$i]->{y}=$y
-                $i++
+                $call do_point
 
+                $if $plist[$i]->{"x-"}
+                    $break = pop @plist
+                    solve_plist(\@plist)
+                    draw_explicit([$plist[$i-1], $break])
+                    @plist=($break)
+                    $i=1
+                $elif $plist[$i]->{"dx-"} or $plist[$i]->{"curl-"}
+                    $break = $plist[$i]
+                    solve_plist(\@plist)
+                    @plist = ($break)
+                    $i=1
+                $else
+                    $i++
+
+        $if $i>1
+            $if @segs==1 and !$break and $has_cycle
+                $plist[0]->{cycle}=1
+            solve_plist(\@plist)
+        $elif !$break and $i==1
+            # draw_point
 
         # -------------------
         subcode: do_tension
+            $if !$plist[$i]
+                $plist[$i]={}
             my $tt=$1
             $if $tt=~/^(\S+)\s*and\s*(\S+)$/
-                $plist[$i-1]->{"tension+"}=>$1
-                $plist[$i]->{"tension-"}=>$2
+                $plist[$i-1]->{"tension+"}=$1
+                $plist[$i]->{"tension-"}=$2
             $else
-                $plist[$i-1]->{"tension+"}=>$tt
-                $plist[$i]->{"tension-"}=>$tt
+                $plist[$i-1]->{"tension+"}=$tt
+                $plist[$i]->{"tension-"}=$tt
 
         subcode: do_control
+            $if !$plist[$i]
+                $plist[$i]={}
             my $tt=$1
             $if $tt=~/^(\S+)\s*and\s*(\S+)$/
                 my ($t1, $t2)=($1, $2)
                 my ($x, $y)=parse_point($t1)
-                $plist[$i-1]->{"control+x"}=>$x
-                $plist[$i-1]->{"control+y"}=>$y
+                $plist[$i-1]->{"x+"}=$x
+                $plist[$i-1]->{"y+"}=$y
                 my ($x, $y)=parse_point($t2)
-                $plist[$i]->{"control-x"}=>$x
-                $plist[$i]->{"control-y"}=>$y
+                $plist[$i]->{"x-"}=$x
+                $plist[$i]->{"y-"}=$y
             $else
                 die "single control point not supported\n"
 
         # -------------------
-        subcode: get_t1_t2
-            my ($t1, $t2)
-            $if $t=~/^{(.*?)}/
-                $t1 = $1
-                $t=$'
-            $if $t=~/^(.*){(.*)}$/
-                $t2 = $2
-                $t = $1
+        subcode: do_point
+            $if !$plist[$i]
+                $plist[$i]={}
+            $call get_t1_t2
+            $call do_dir_1
+            $call do_dir_2
+            my ($x, $y)=parse_point($t)
+            $plist[$i]->{x}=$x
+            $plist[$i]->{y}=$y
 
-            $if !$t1 && $t2
-                $t1 = $t2
-                undef $t2
+            # -------------
+            subcode: get_t1_t2
+                my ($t1, $t2)
+                $if $t=~/^{(.*?)}/
+                    $t1 = $1
+                    $t=$'
+                $if $t=~/^(.*){(.*)}$/
+                    $t2 = $2
+                    $t = $1
 
-        subcode: do_dir_1
-            $if $t1
-                $if $t1=~/curl\s*(\S+)/
-                    $plist[$i]->{"curl-"}=$1
-                    $plist[$i]->{"curl+"}=$1 unless $t2
-                $else
-                    my ($x, $y)=parse_point($t1)
-                    $plist[$i]->{"dir-x"}=$x
-                    $plist[$i]->{"dir-y"}=$y
-                    $if !$t2
-                        $plist[$i]->{"dir+x"}=$x
-                        $plist[$i]->{"dir+y"}=$y
-        subcode: do_dir_2
-            $if $t2
-                $if $t2=~/curl\s*(\S+)/
-                    $plist[$i]->{"curl+"}=$1
-                $else
-                    my ($x, $y)=parse_point($t2)
-                    $plist[$i]->{"dir+x"}=$x
-                    $plist[$i]->{"dir+y"}=$y
+                $if !$t1 && $t2
+                    $t1 = $t2
+                    undef $t2
+
+            subcode: do_dir_1
+                $if $t1
+                    $if $t1=~/curl\s*(\S+)/
+                        $plist[$i]->{"curl-"}=$1
+                        $if !$t2
+                            $plist[$i]->{"curl+"}=$1
+                    $else
+                        my ($x, $y)=parse_dir($t)
+                        $plist[$i]->{"dx-"}=$x
+                        $plist[$i]->{"dy-"}=$y
+                        $if !$t2
+                            $plist[$i]->{"dx+"}=$x
+                            $plist[$i]->{"dy+"}=$y
+            subcode: do_dir_2
+                $if $t2
+                    $if $t2=~/curl\s*(\S+)/
+                        $plist[$i]->{"curl+"}=$1
+                    $else
+                        my ($x, $y)=parse_dir($t2)
+                        $plist[$i]->{"dx+"}=$x
+                        $plist[$i]->{"dy+"}=$y
 
 
+#---------------------------------------- 
 fncode: parse_point($t)
     my $exp = parse_expr($t, {}, {})
     $if $exp->[1] ne "list"
@@ -142,10 +142,102 @@ fncode: parse_point($t)
             die "parse_point illegal type [$t]\n"
     return @t
 
+fncode: parse_dir($t)
+    my ($x, $y)
+    $if $t eq "left"
+        ($x, $y)=(-1,0)
+    $elif $t eq "right"
+        ($x, $y)=(1,0)
+    $elif $t eq "up"
+        ($x, $y)=(0,1)
+    $elif $t eq "down"
+        ($x, $y)=(0,-1)
+    $elif $t=~/dir\s*(\S+)/
+        ($x, $y)=(cos($1), sin($1))
+    $else
+        ($x, $y)=parse_point($t)
+        my $d = sqrt($x**2+$y**2)
+        $x/=$d
+        $y/=$d
+    return ($x, $y)
 
-    
+#---------------------------------------- 
+fncode: draw_explicit($plist)
+    $call moveto, 0
+    $call curveto, 1
 
+fncode: solve_plist($plist)
+    my $n=@$plist
 
+    $if $n==0
+        return
+    $elif $n==1
+        return
+    $elif $n==2 && !$plist->[0]->{"dx+"} && !$plist->[1]->{"dx-"}
+        $call moveto, 0
+        $call lineto, 1
+    $else
+        $call solve
+        $call draw
 
+    subcode: solve
+        push @$out, "my \@path;\n"
+        $foreach $t in @$plist
+            my @t
+            $foreach $k in sort keys %$t
+                push @t, "\"$k\"=>$t->{$k}"
+            push @$out, "push \@path, {".join(', ', @t)."};\n"
+        push @$out, "MyPlot::solve_path(\\\@path);\n"
 
+    subcode: draw
+        my $t="$plist->[0]->{x}, $plist->[0]->{y}"
+        $if $last_point ne $t
+            push @$out, "MyPlot::do_path(\$page_content, \\\@path, 0);\n"
+        $else
+            push @$out, "MyPlot::do_path(\$page_content, \\\@path, 1);\n"
+        $if !$plist->[0]->{cycle}
+            $last_point="$plist->[-1]->{x}, $plist->[-1]->{y}"
+        $else
+            undef $last_point
+
+#---------------------------------------- 
+subcode: _autoload
+    $global $first_point, $last_point
+
+subcode: moveto(i)
+    my $t="$plist->[$(i)]->{x}, $plist->[$(i)]->{y}"
+    $if $last_point ne $t
+        MyDef::compileutil::call_sub("moveto, $t")
+    $if !$first_point
+        $first_point=$t
+
+subcode: lineto(i)
+    my $t="$plist->[$(i)]->{x}, $plist->[$(i)]->{y}"
+    MyDef::compileutil::call_sub("lineto, $t")
+    $last_point=$t
+
+subcode: curveto(i)
+    my $t="$plist->[$(i)]->{x}, $plist->[$(i)]->{y}"
+    my $j=$(i)-1
+    my $t2=""
+    $t2 .= $plist->[$j]->{"x+"}.", "
+    $t2 .= $plist->[$j]->{"y+"}.", "
+    $t2 .= $plist->[$(i)]->{"x-"}.", "
+    $t2 .= $plist->[$(i)]->{"y-"}.", "
+    MyDef::compileutil::call_sub("curveto, $t2 $t")
+    $last_point=$t
+
+subcode: path_curveto(i)
+    my $t="$plist->[$(i)]->{x}, $plist->[$(i)]->{y}"
+    $(if:i=0)
+        my $j=$n-1
+    $(else)
+        my $j=$(i)-1
+    my $t2=""
+    $t2 .= "\$path[$j]->{\"x+\"}, "
+    $t2 .= "\$path[$j]->{\"y+\"}, "
+    $t2 .= "\$path[$(i)]->{\"x-\"}, "
+    $t2 .= "\$path[$(i)]->{\"y-\"}, "
+    MyDef::compileutil::call_sub("curveto, $t2 $t")
+    $last_point=$t
 

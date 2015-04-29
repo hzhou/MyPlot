@@ -81,7 +81,7 @@ subcode: parse_set_point_output
     $if %points
         $call sort_zlist
         $call @check_rotate
-        $call @check_orgin
+        $call @check_origin
         $call output
 
     subcode: sort_zlist
@@ -134,7 +134,7 @@ fncode: parse_point_name($v, $macros)
 
     $if $tail
         $(for:i in i,j,k)
-            $if $macros->{$(i)}
+            $if defined $macros->{$(i)}
                 $tail=~s/$(i)/$macros->{$(i)}/g
 
     return ($pre, $xyz, $tail)

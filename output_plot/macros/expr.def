@@ -33,13 +33,15 @@ fncode: parse_expr($l, $macros1, $macros2)
                 ','=>1, 
                 "+"=>2, "-"=>2, 
                 "*"=>3, "/"=>3, "%"=>3, 
-                "unary"=>4,
+                "^"=>4,
+                "func"=>5,
+                "unary"=>6,
                 "num"=>4,
                 "list"=>4,
                 "var"=>4,
-                "name"=>4,
-                "^"=>6,
+                '('=>-1, '['=>-1, ')'=>0, ']'=>0, 't('=>4, 't['=>4,
                 );
+        my %func=();
 
     subcode: match
         my $cur
@@ -58,8 +60,10 @@ fncode: parse_expr($l, $macros1, $macros2)
             $call @parse_word
         $elif $l=~/\G([\+\-\*\/,])/gc
             $cur = [$1, $1]
-        $elif $l=~/\G([\(\[\)\]])/gc
-            $cur = [$1, $1]
+        $elif $l=~/\G([\(\[])/gc
+            $cur = [$1, "t$1"]
+        $elif $l=~/\G([\)\]])/gc
+            $cur = [$1, "$1"]
         $elif $l=~/\G;/gc
             $cur = [undef, "eof"]
         $else
@@ -71,17 +75,19 @@ fncode: parse_expr($l, $macros1, $macros2)
                 $cur = [$macros1->{$1}, "num"]
             $elif defined $macros2->{$1}
                 $cur = [$macros2->{$1}, "num"]
+            $elif $func{$1}
+                $cur = [$1, "func"]
             $else
                 my $t=$1
-                my ($pre, $xyz, $tail)=parse_point_name($t, $macros2)
+                my ($pre, $xyz, $tail)=parse_point_name($1, $macros2)
                 $if !$xyz
-                    $cur = [$t, "name"]
+                    $cur = make_var($t, {})
                 $elif $xyz eq "z"
                     my $x = make_var($pre."x".$tail, $macros2)
                     my $y = make_var($pre."y".$tail, $macros2)
                     $cur = [[$x, $y], "list"]
                 $else
-                    $cur = make_var($t, $macros2)
+                    $cur = make_var($pre.$xyz.$tail, $macros2)
 
     # ------------------------------------------
     macros:
@@ -91,7 +97,7 @@ fncode: parse_expr($l, $macros1, $macros2)
 
     subcode:: init
         my @bracket_stack
-        my %match={'['=>']', '('=>')'}
+        my %match=('['=>']', '('=>')')
 
     subcode: process
         process:
@@ -99,24 +105,26 @@ fncode: parse_expr($l, $macros1, $macros2)
 
         $if $(cur_type) eq "eof"
             break
-        $elif $(cur_type) eq '[' or $(cur_type) eq '('
+        $elif $(cur_type) eq 't[' or $(cur_type) eq 't('
+            $(cur_type)=substr($(cur_type), 1, 1)
             push @bracket_stack, $match{$(cur_type)}
         $elif $(cur_type) eq ']' or $(cur_type) eq ')'
-            $call @check_bracket_close
-        $elif $(cur_type) eq '-' and $(type:-1) !~/num|var|list|atom/
+            $call bracket_close
+        $elif $(cur_type) eq '-' and $(type:-1) !~/num|var|list/
             $cur = ["-", "unary"]
 
 
         # -------------------
         subcode: bracket_close
             $if $(cur_type) ne $bracket_stack[-1]
+                $print "cur: $(cur_type), last: $bracket_stack[-1]"
                 die "Bracket mismatch\n"
             $elif $match{$(type:-1)} eq $(cur_type)
                 die "Bracket empty\n"
             $elif $match{$(type:-2)} eq $(cur_type)
                 my $t = pop @stack
                 pop @stack
-                $if $type eq ")"
+                $if $(cur_type) eq ")"
                     $cur = $t
                     goto process
                 $elif $(cur_type) eq "]"
@@ -132,7 +140,7 @@ fncode: parse_expr($l, $macros1, $macros2)
                         $cur = do_portion($t2->[0], @{$t->[0]})
                     $elif $(atom:-1) eq "-"
                         pop @stack
-                        $cur = do_portion(-1, @{t->[0]})
+                        $cur = do_portion(-1, @{$t->[0]})
                     $else
                         die "Error [ ]\n"
                 $else
@@ -143,10 +151,9 @@ fncode: parse_expr($l, $macros1, $macros2)
             $if !defined $prec{$(cur_type)}
                 die "precedence $(cur_type) not specified\n"
             $(set:cond) join, " and "
-                $(cur_type)!~/num|name|atom/
                 @stack>=2
+                ($(type:-1)=~/num|var|list/)
                 $prec{$(cur_type)} <= $prec{$(type:-2)}
-                ($(type:-1) ne '(' or $(type:-1) ne '[')
             $while $(cond)
                 reduce_stack(\@stack)
 
@@ -155,28 +162,32 @@ fncode: reduce_stack($stack)
     my $cur
     my $t = pop @$stack
     my $op = pop @$stack
-    # $print "reduce_stack $op->[1], $t->[1]\n"
     $if $(type:$op) eq "unary"
         $if $(atom:$op) eq "-"
-            my $t = pop @$stack
-            pop @$stack
             $cur = do_unary("neg", $t)
         $else
             die "Non-supported unary operator\n"
-    $elif $(type:$op) =~/[\+\-\*\/\^]/
+    $elif $(type:$op) =~/[\+\-\*\/\^,]/
         my $t2 = pop @$stack
         $cur = do_binary($(type:$op), $t2, $t)
     $elif $(type:$op) eq "num"
         $cur = do_binary("*", $op, $t)
-    $elif $(type:$op) eq "name"
+    $elif $(type:$op) eq "func"
         $cur = do_function($(atom:$op), $t)
     $else
-        die "not supported operatory type $(type:$op)\n"
+        print_token($op, "op")
+        print_token($t, "t")
+        die "not supported operator type $(type:$op)\n"
 
     # print_token($t, "    ")
     push @$stack, $cur
 
 #---------------------------------------- 
+subcode: debug_stack
+    $print "debug_stack:\n"
+    $foreach $t in @$stack
+        print_token($t)
+
 fncode: print_token($t, $pre, $post)
     $if defined $pre
         print $pre

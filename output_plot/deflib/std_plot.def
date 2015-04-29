@@ -1,6 +1,6 @@
 include: std_perl.def
 
-Macros:
+macros:
     PLOT: MyPlot
 
 subcode: basic_frame(@outname)
@@ -20,6 +20,7 @@ subcode: basic_frame(@outname)
 subcode: newpage
     $global $page_content
     $page_content=$(PLOT)::newpage()
+    $call @default_graphic_state
 
 subcode: open_pdf(f)
     $(if:f~")
@@ -34,99 +35,50 @@ subcode: open_pdf(f)
 #---------------------------------------- 
 
 subcode: save_graphic_state
-    push @$page_content, "q"
+    $(PLOT)::save_state($page_content)
     BLOCK
-    push @$page_content, "Q"
+    $(PLOT)::restore_state($page_content)
+
+subcode: default_graphic_state
+    $call linewidth, 2
+    $call linecap, round
+    $call linejoin, round
 
 #---------------------------------------- 
 subcode: linewidth(w)
-    push @$page_content, "$(w) w"
+    $(PLOT)::line_width($page_content, $(w))
 
 subcode: linecap(m)
-    #- 0 Butt, 1 Round, 2 Projecting square -----
-    $(if:m=butt or m=0)
-	push @$page_content, "0 J"
-    $(elif:m=round or m=1)
-	push @$page_content, "1 J"
-    $(elif:m=2 or m=3)
-	push @$page_content, "2 J"
-    $(else)
-	push @$page_content, "0 J"
+    $(PLOT)::line_cap($page_content, "$(m)")
 
 subcode: linejoin(m)
-    #- 0 Miter, 1 Round, 2 Bevel -----
-    $(if:m=miter or m=0)
-	push @$page_content, "0 j"
-    $(elif:m=round or m=1)
-	push @$page_content, "1 j"
-    $(elif:m=bevel or m=2 or m=3)
-	push @$page_content, "2 j"
-    $(else)
-	push @$page_content, "0 j"
+    $(PLOT)::line_join($page_content, "$(m)")
 
 subcode: linedash(m)
-    $(if:m=1)
-	push @$page_content, "[3] 0 d"
-    $(elif:m=2)
-	push @$page_content, "[6 3] 0 d"
-    $(elif:m=3)
-	push @$page_content, "[8 7 2 7] 0 d"
-    $(else)
-	#--- 0 solid -----------------
-	push @$page_content, "[] 0 d"
+    $(PLOT)::linedash($page_content, $(m))
 
 #---------------------------------------- 
 subcode: linecolor(@name)
     $call strokecolor, $(name)
 
 subcode: strokecolor(@name)
-    my ($space, $color)=$(PLOT)::get_color_statement("$(name)")
-    $if $space==0
-	push @$page_content, "$color G"
-    $elif $space==1
-	push @$page_content, "$color RG"
-    $elif $space==2
-	push @$page_content, "$color K"
+    $(PLOT)::stroke_color($page_content, "$(name)")
 
 subcode: fillcolor(@name)
-    my ($space, $color)=$(PLOT)::get_color_statement("$(name)")
-    $if $space==0
-	push @$page_content, "$color g"
-    $elif $space==1
-	push @$page_content, "$color rg"
-    $elif $space==2
-	push @$page_content, "$color k"
+    $(PLOT)::fill_color($page_content, "$(name)")
 
 #---------------------------------------- 
 subcode: moveto(x, y)
-    push @$page_content, join ' ', $(x), $(y), "m"
+    $(PLOT)::moveto($page_content, $(x), $(y))
 
 subcode: lineto(x, y)
-    push @$page_content, join ' ', $(x), $(y), "l"
+    $(PLOT)::lineto($page_content, $(x), $(y))
 
 subcode: curveto(x1, y1, x2, y2, x3, y3)
-    push @$page_content, join ' ', $(x1), $(y1), $(x2), $(y2), $(x3), $(y3), "c"
+    $(PLOT)::curveto($page_content,$(x1), $(y1), $(x2), $(y2), $(x3), $(y3))
 
 subcode: closepath
-    push @$page_content, "h"
-
-# ---------------------
-subcode: draw_path
-    $(set:coor=$path[$1]->{x}, $path[$1]->{y})
-    $(set:control=$path[$1]->{"control+x"}, $path[$1]->{"control+y"})
-    my $n=@path
-    $call moveto, $(coor:0)
-    $for $i=1:$n
-        $if $path[$i]->{line}
-            $call lineto, $(coor:$i)
-        $else
-            $call curveto, $(control:$i-1), $(control:$i), $(coor:$i)
-    $if $path[0]->{cycle}
-        $if $path[0]->{line}
-            $call lineto, $(coor:0)
-        $else
-            $call curveto, $(control:$n-1), $(control:0), $(coor:0)
-        $call closepath
+    $(PLOT)::close_path($page_content)
 
 #---------------------------------------- 
 subcode: setdraw(draw)

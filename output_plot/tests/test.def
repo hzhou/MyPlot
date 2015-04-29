@@ -1,14 +1,30 @@
 page: test, basic_frame, t.pdf
-    DEBUG ON
     $set_point i=0:6, a=100, origin (300,300)
         j = i+1
-        xj = i%3 * a
-        yj = i/3 * a
+        xj = (i%3-1) * a
+        yj = (0.5-i/3) * a
 
-    $call linewidth, 4
+    $call linewidth, 20
+    $call linecolor, 0.5
     $call setdraw, stroke
-    $draw z1..z6
-    $draw z3..z4
-    $draw z2..z5
-    $call draw
+    $(if:0)
+        $draw z1..z6
+        $draw z3..z4
+        $draw z2..z5
+
+    $(if:1)
+        # $draw z4..controls z1 and z2..z6
+        # $draw z4{z2-z4}..{down}z6
+        # $draw z4{curl 2}..z2{z3-z4}..{curl 2}z3
+        # $draw z4{left}..z1..z3..z6{left}..z5..z4
+        # $draw z5..z4..z1..z3..z6..z5
+        $draw z5..z4..z1..tension 1.2..z3..z6..cycle
+        MyPlot::draw_points($page_content, \@path)
+    $(else)
+        $set_point a=100, origin (300, 500)
+            z1 = (0, a)
+            z2 = (-a, 0)
+            z3 = (0, -a)
+            z4 = (a, 0)
+        $draw z1..z2..z3..z4..cycle
 

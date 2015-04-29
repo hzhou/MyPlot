@@ -36,5 +36,10 @@ subcode:: on_callback
 #---------------------------------------- 
 subcode:: parse_func
     $case $func eq "draw"
+        undef $first_point
+        undef $last_point
         parse_path($param)
+        $if $first_point eq $last_point
+            MyDef::compileutil::call_sub("closepath")
+        MyDef::compileutil::call_sub("draw")
         return 0
