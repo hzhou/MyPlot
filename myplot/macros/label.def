@@ -1,0 +1,58 @@
+
+fncode: draw_points($page_content, $path)
+    my $n=@$path
+    save_state($page_content)
+
+    stroke_color($page_content, "black")
+    $(set:p=$path->[$i]->{"$1"})
+
+    $(if:0)
+        my $ft = find_font("Helvetica")
+        push @$page_content, "/$ft->{Name} 8 Tf"
+
+    $for $i=0:$n
+        $(if:0)
+            text_at($page_content, $(p:x)+10, $(p:y)+5, $i+1)
+        line_width($page_content, 4)
+        moveto($page_content, $(p:x), $(p:y))
+        lineto($page_content, $(p:x), $(p:y))
+        push @$page_content, "S"
+        line_width($page_content, 2)
+        $if defined $(p:x+)
+            moveto($page_content, $(p:x+), $(p:y+))
+            lineto($page_content, $(p:x+), $(p:y+))
+            push @$page_content, "S"
+        $if defined $(p:x-)
+            moveto($page_content, $(p:x-), $(p:y-))
+            lineto($page_content, $(p:x-), $(p:y-))
+            push @$page_content, "S"
+
+    restore_state($page_content)
+
+fncode: arrow($page_content, $path)
+    my $p=$path->[-1]
+
+    my ($x, $y)=($p->{x}, $p->{y})
+    my ($dx, $dy)
+
+    $if defined $p->{"x-"} and defined $p->{"y-"}
+        $dx = $x - $p->{"x-"}
+        $dy = $y - $p->{"y-"}
+        $call normalize_dx_dy
+    $elif defined $p->{"dx-"} and defined $p->{"dy-"}
+        ($dx, $dy)=($p->{"dx-"}, $p->{"dy-"})
+    $elif $path->[-2]
+        $dx = $x - $path->[-2]->{x}
+        $dy = $y - $path->[-2]->{y}
+        $call normalize_dx_dy
+
+    subcode: normalize_dx_dy
+        my $d=sqrt($dx**2+$dy**2)
+        $if $d>0
+            $dx/=$d
+            $dy/=$d
+        $else
+            undef $dx
+
+
+
