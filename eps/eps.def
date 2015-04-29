@@ -1,0 +1,78 @@
+subcode: eps_frame(f, w, h)
+    $global $pagesize=800.0
+    my $scale=$pagesize/$(w)
+    my $h=int($(h)*$scale)
+    &call open_w, $(f)
+	print Out "%!PS-Adobe-2.0 EPSF-2.0\n"
+	print Out "%%", "BoundingBox: 0 0 $pagesize $h\n"
+	print Out "gsave 10 dict begin\n"
+	print Out "$scale $scale scale\n"
+	BLOCK
+	print Out "end grestore\n"
+    print " --> $(f)\n"
+
+#---------------------------------------- 
+subcode: translate(x, y)
+    print Out "$(x) $(y) translate\n"
+
+#---------------------------------------- 
+subcode: linewidth(w)
+    my $lw=$(w)/$scale
+    print Out "$lw setlinewidth\n"
+
+subcode: color(name)
+    print Out get_color_statement("$(name)"), "\n"
+
+subcode: setdash
+    my $t=2/$scale
+    print Out "[$t $t] 0 setdash\n"
+
+#---------------------------------------- 
+subcode:: _autoload
+    $global %gray_hash=(white=>1, black=>0)
+    $global %color_hash=(red=>"1 0 0", green=>"0 1 0", blue=>"0 0 1")
+    $sub get_color_statement($name)
+	$if $gray_hash{$name}
+	    return "$gray_hash{$name} setgray"
+	$elif $color_hash{$name}
+	    return "$color_hash{$name} setrgbcolor"
+	$elif $name=~/^(0\.\d+)$/
+	    return "$1 setgray"
+
+#---------------------------------------- 
+subcode: setdraw(draw)
+    $(export:draw)
+
+subcode: setfill(color)
+    my $fill_color_stmt=get_color_statement("$(color)")
+    $(export:draw=gsave $fill_color_stmt fill grestore stroke)
+
+subcode: draw
+    $(if:draw)
+	print Out "$(draw)\n"
+    $(else)
+	print Out "stroke\n"
+
+subcode: gsave
+    print Out "gsave\n"
+    BLOCK
+    print Out "grestore\n"
+#---------------------------------------- 
+subcode: circle(x, y, r)
+    my $x0=$(x)
+    my $y0=$(y)
+    print Out "newpath $x0 $y0 $(r) 0 360 arc closepath\n"
+    $call draw
+
+subcode: square(x, y, a)
+    $call rect, center, $(x), $(y), $(a), $(a)
+
+subcode: rect(type, x, y, w, h)
+    $(if:type=ll)
+	my $x0=$(x)
+	my $y0=$(y)
+    $(elif:type=center)
+	my $x0=$(x)-$(w)/2
+	my $y0=$(y)-$(h)/2
+    print Out "newpath $x0 $y0 moveto $(w) 0 rlineto 0 $(h) rlineto -$(w) 0 rlineto closepath\n"
+    $call draw

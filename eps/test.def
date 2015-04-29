@@ -1,0 +1,60 @@
+include: eps.def
+
+page: test
+    subcode: main
+	$pagesize=600
+
+	&call eps_frame, t.eps, 3, 3
+	    $call translate, 1.5, 1.5
+	    $call linewidth, 2
+
+	    $call color, green
+	    $call square, 0, 0, 2
+
+	    $call color, red
+	    $call circle, 0, 0, 1.12222222
+
+	    $call setdash
+
+	    $call color, blue
+	    $call circle, 0, 0, 1.086
+
+	    # $call circle, 0, 0, 1.0
+
+
+page: basement
+    subcode: main
+	&call eps_frame, /media/tmp/t.eps, 30, 56
+	    $call translate, 1, 1
+
+	    $call linewidth, 3
+	    $call rect, ll, 0, 0, 28, 54
+	    #- dirt
+	    # $call setfill, 0.2
+	    $call rect, ll, 0, 38.5, 15, 15.5
+	    &call gsave
+		$call color, white
+		$call setdraw, fill
+		$call rect, ll, 0-0.5, 38.5+0.5, 15, 15.5
+
+	    $call linewidth, 1
+	    $call rect, ll, 3, 22.5, 10, 3.5
+
+	    #- room
+	    $call rect, ll, 0, 26, 13, 12.5
+	    #- utility room
+	    $call rect, ll, 13, 0, 15, 7
+	    
+	    #- util sink
+	    $call rect, ll, 26, 4.5, 2, 2
+	    #- furnace
+	    $call rect, ll, 13+4, 2, 4, 3
+	    #- water heater
+	    $call circle, 13+2, 2, 1
+	    #- softner
+	    $call rect, ll, 13+3, 5, 2, 2
+
+	    #- post
+	    $call circle, 13.25, 12.5, 0.25
+	    $call circle, 13.25, 26, 0.25
+
