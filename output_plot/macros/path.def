@@ -11,8 +11,7 @@ fncode: parse_path($param, $info)
     $foreach $s in @t_segs
         $call parse
 
-    my $first_point
-    my $last_point
+    my ($first_point, $last_point)
     $foreach $plist in @segments
         my $t="$plist->[0]->{x}, $plist->[0]->{y}"
         $if $t ne $last_point

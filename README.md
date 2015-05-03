@@ -14,15 +14,17 @@ Plot module for MyDef.
 Perl EPS macros.
 
 ## Example 1
-
+[Showing some DSL syntax]
 ```
 page: test, basic_frame, t.pdf
-    $group origin (200, 300), 10pt, gray, u=100
+    $set_point i=0:4, j=0:4, u=100
+        zij=(i*u,j*u)
+    $group origin (200, 300), 10pt, gray
         $(for:i in 0,1,2)
             $(for:j in 0,1,2)
-                $draw ($(i)u, $(j)u)
+                $draw z$(i)$(j)
         $line 2, black
-        $draw (2u,2u)--(0,0)--(0,3u)--(3u,0)--(0,0)
+        $draw z22--z00--z03--z30--z00
 ```
 
 ```
@@ -37,6 +39,8 @@ PAGE: test
 Explore output_plot/tests/ for more.
 
 ## Example 2 (Sierpinsky)
+
+[You don't need learn special syntax to start, you can simply write Perl.]
 ```
 page: sierpinski, basic_frame, t.pdf
     my $str="A"

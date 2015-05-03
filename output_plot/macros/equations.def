@@ -35,6 +35,11 @@ fncode: parse_eqn($left, $right, $macro, $points)
         $if !exists $t{1}
             $t{1}=0
         my @t=sort {$a cmp $b} keys %t
+        $if $debug
+            print "eqn: "
+            $foreach $t in @t
+                print " $t{$t} $t, "
+            print "\n"
 
     subcode: solve_simple
         my $k=$t[1]

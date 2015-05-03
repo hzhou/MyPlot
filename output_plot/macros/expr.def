@@ -6,7 +6,8 @@ macros:
 fncode: parse_expr($l, $macros1, $macros2)
     $if !$l
         return
-    # $print "parse_expr [$l]"
+    $if $debug
+        $print "parse_expr [$l]"
     $(if:0)
         $foreach %$macros1
             $print "  macros1 $k: $v"
@@ -26,6 +27,8 @@ fncode: parse_expr($l, $macros1, $macros2)
         $foreach $t in @stack
             print_token($t)
         die "Unreduced expresion [$l].\n"
+    $if $debug
+        print_token($stack[0], "    ret: ")
     return $stack[0]
 
     # ------------
