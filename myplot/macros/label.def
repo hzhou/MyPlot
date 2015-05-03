@@ -1,5 +1,68 @@
+fncode: label_point($h)
+    $call get_label_font
+    my ($x, $y)=($h->{x}, $h->{y})
+    $call circle_point
 
-fncode: draw_points($page_content, $path)
+    &call with_label_string
+        $call get_h_opt, place, "d"
+        $if $place eq "d"
+            $x -= $w/2
+            $y -= $font_size*1.5
+            text_at($x, $y, $s)
+        
+    # -------------
+    subcode: circle_point
+        $call get_h_opt, w, 4
+        moveto($x, $y-$w)
+        curveto($x+1.5*$w, $y-$w, $x+1.5*$w, $y+$w, $x, $y+$w)
+        curveto($x-1.5*$w, $y+$w, $x-1.5*$w, $y-$w, $x, $y-$w)
+        close_path()
+        fill()
+
+    # -------------
+
+fncode: label_edge($h)
+    $call get_label_font
+    $(for:x in x1,y1,x2,y2)
+        my $$(x)=$h->{$(x)}
+
+    my $x=($x1+$x2)/2
+    my $y=($y1+$y2)/2
+
+    my $slope=atan2($y2-$y1, $x2-$x1)*180/3.14159265
+    $if $slope<0
+        ($x1, $x2)=($x2, $x1)
+        ($y1, $y2)=($y2, $y1)
+        $slope+=180
+
+    &call with_label_string
+        $if $slope <5
+            $x -= $w/2
+            $y += $w/2*($y2-$y1)/($x2-$x1)+$font_size/2
+            text_at($x, $y, $s)
+        $else
+            $x += $font_size/2 *($x2-$x1)/($y2-$y1)+$font_size/2
+            $y -= $font_size/2
+            text_at($x, $y, $s)
+
+#---------------------------------------- 
+subcode: get_h_opt(v, default)
+    my $$(v)=$h->{"$(v)"}
+    $if !defined $$(v)
+        $$(v)=$(default)
+
+subcode: get_label_font
+    my $ft=find_font($config{label_font})
+    $call get_h_opt, font_size, 12
+    set_font($ft, $font_size)
+
+subcode: with_label_string
+    $if defined $h->{label}
+        my $s=$h->{label}
+        my $w=text_width($s, $ft, $font_size)
+        BLOCK
+#---------------------------------------- 
+fncode: draw_points($path)
     my $n=@$path
     save_state($page_content)
 
@@ -29,7 +92,7 @@ fncode: draw_points($page_content, $path)
 
     restore_state($page_content)
 
-fncode: arrow($page_content, $path)
+fncode: arrow($path)
     my $p=$path->[-1]
 
     my ($x, $y)=($p->{x}, $p->{y})

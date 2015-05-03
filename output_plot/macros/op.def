@@ -18,10 +18,7 @@ fncode: do_unary($op, $t)
 
 fncode: do_binary($op, $t1, $t2)
     $if $op eq ","
-        $if $(type:$t1) eq "list" and $(type:$t2) eq "list"
-            push @{$(atom:$t1)}, @{$(atom:$t2)}
-            return $t1
-        $elif $(type:$t1) eq "list"
+        $if $(type:$t1) eq "list" and $(type:$t2) ne "list"
             push @{$(atom:$t1)}, $t2
             return $t1
         $else

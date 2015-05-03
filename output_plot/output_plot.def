@@ -1,19 +1,29 @@
 include: output.def
 include: macros/points.def
 include: macros/path.def
+include: macros/parse_common.def
 
 include: macros/expr.def
 include: macros/op.def
 include: macros/equations.def
+include: macros/function.def
 
+include: macros/gstate.def
+include: macros/color.def
+
+macros:
+    P: MyPlot::$1
+
+subcode: Plot(@l)
+    push @$out, "MyPlot::$(l);"
+
+#---------------------------------------- 
 page: output_plot, inherit, perl
     output_dir: lib/MyDef
     package: MyDef::output_plot
     ext: pl
 
 #---------------------------------------- 
-subcode: on_init
-
 subcode: on_parsecode
     $if $l=~/CALLBACK\s*(\w+)\s*(.*)/
         my ($func, $param)=($1, $2)
@@ -24,7 +34,7 @@ subcode: on_parsecode
         my ($func, $param)=($1, $2)
         $call @parse_func
 
-#---------------------------------------- 
+#----- points ----------------------------------- 
 subcode:: parse_func
     $case $func eq "set_point"
         return "CALLBACK set_point $param"
@@ -33,13 +43,67 @@ subcode:: on_callback
     $case $func eq "set_point"
         $call parse_set_point
 
-#---------------------------------------- 
+#----- draw ----------------------------------- 
 subcode:: parse_func
     $case $func eq "draw"
-        undef $first_point
-        undef $last_point
-        parse_path($param)
-        $if $first_point eq $last_point
-            MyDef::compileutil::call_sub("closepath")
-        MyDef::compileutil::call_sub("draw")
+        check_default("draw")
+        my $info={type=>"draw"}
+        parse_path($param, $info)
+        $call Plot, stroke()
         return 0
+    $case $func eq "fill"
+        check_default("fill")
+        my $info={type=>"fill"}
+        parse_path($param, $info)
+        $call Plot, fill()
+        return 0
+
+#---- label ------------------------------------ 
+subcode:: parse_func
+    $case $func eq "label"
+        $call parse_label
+        return 0
+
+subcode: parse_label
+    $if $param=~/^\[(.*?)\](.*)/
+        $call @edge
+    $elif $param=~/^</
+        $call @angle
+    $else
+        $call @point
+
+    subcode: point
+        my $tail
+        $if $param=~/(.*?):\s*(.*)/
+            ($param, $tail)=($1, $2)
+        my ($x, $y)=parse_point($param)
+        my @t
+        push @t, "x=>$x"
+        push @t, "y=>$y"
+        $if $param=~/^z(\w+)/
+            push @t, "label=>\"$1\""
+        $elif $param=~/^(\w+_)z(\w+)/
+            push @t, "label=>\"$1_$2\""
+        $else
+            push @t, "label=>\"$param\""
+        my $t=join(", ", @t)
+        $call Plot, label_point({$t})
+
+    subcode: edge
+        my ($param, $tail)=($1, $2)
+        $tail=~s/^\s*[:,]?\s*//
+        my ($x1, $y1, $x2, $y2)=parse_edge($param)
+        my @t
+        $(for:x in x1,y1,x2,y2)
+            push @t, "$(x)=>$$(x)"
+
+        my @tlist=MyDef::utils::proper_split($tail)
+        $foreach $t in @tlist
+            $if $t=~/"(.*)"/
+                push @t, "label=>$t"
+
+        my $t=join(", ", @t)
+        $call Plot, label_edge({$t})
+
+
+

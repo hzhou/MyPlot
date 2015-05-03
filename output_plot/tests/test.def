@@ -1,30 +1,79 @@
 page: test, basic_frame, t.pdf
-    $set_point i=0:6, a=100, origin (300,300)
-        j = i+1
-        xj = (i%3-1) * a
-        yj = (0.5-i/3) * a
+    $call fig_6
 
-    $call linewidth, 20
-    $call linecolor, 0.5
-    $call setdraw, stroke
-    $(if:0)
-        $draw z1..z6
-        $draw z3..z4
-        $draw z2..z5
+subcode: fig_1
+    #-- 9 trees
+    $group origin (200, 300), 10pt, gray, u=100
+        $(for:i in 0,1,2)
+            $(for:j in 0,1,2)
+                $draw ($(i)u, $(j)u)
+        $line 2, black
+        $draw (2u,2u)--(0,0)--(0,3u)--(3u,0)--(0,0)
 
-    $(if:1)
-        # $draw z4..controls z1 and z2..z6
-        # $draw z4{z2-z4}..{down}z6
-        # $draw z4{curl 2}..z2{z3-z4}..{curl 2}z3
-        # $draw z4{left}..z1..z3..z6{left}..z5..z4
-        # $draw z5..z4..z1..z3..z6..z5
-        $draw z5..z4..z1..tension 1.2..z3..z6..cycle
-        MyPlot::draw_points($page_content, \@path)
-    $(else)
-        $set_point a=100, origin (300, 500)
-            z1 = (0, a)
-            z2 = (-a, 0)
-            z3 = (0, -a)
-            z4 = (a, 0)
+subcode: fig_2
+    $group origin(300,200)
+        $draw $(circle:100)
+    $group origin(200,350)
+        $draw $(square:100)
+
+subcode: fig_3
+    $set_point
+        z0=(0,0)
+        z1=(60,40)
+        z2=(40,90)
+        z3=(10,70)
+        z4=(30,50)
+
+    $group origin (100, 200)
+        $draw z0..z1..z2..z3..z4
+    $group origin (200, 200)
+        $draw z0..z1..z2..z3..z4..cycle
+    $group origin (300, 200)
+        $draw z0..z1..z2..z3--z4--cycle
+
+    $group origin (100, 350)
+        $draw z0..z1{up}..z2{left}..z3..z4
+
+subcode: fig_4
+    $group origin(100, 100)
+        $for $a=0:91:10
+            $draw (0,0){dir 45}..{dir -$a}(300,0)
+    $group origin(100, 300)
+        $for $a=0:91:10
+            $draw (0,0){dir 45}..{dir $a}(300,0)
+
+    $group origin(100,500)
+        $draw (0,0){up}..(200,40){right}..(400,0){down}
+    $group origin(100,600)
+        $draw (0,0){up}...(200,40){right}...(400,0){down}
+
+subcode: fig_5
+    $set_point a=100, b=60
+        z0=(0,0)
+        z1=(a,0)
+        z2=(0,b)
+        z3=-z1
+        z4=-z2
+    $group origin(300,100)
         $draw z1..z2..z3..z4..cycle
+        $draw z1--z0--z2
+        $label z0
+        $label [z0,z1]: "a"
+        $label [z0,z2]: "b"
+
+subcode: fig_6
+    $set_point a=100
+        z0=(0,0)
+        z1=(-a,0)
+        z2=(a,0)
+        z3=1/2[z0,z1]
+        z4=1/2[z0,z2]
+
+    $group origin(300, 300), a=100
+        $draw $(circle:a)
+        $fill z1..arc(-180,0)..z0..arc(180,0)..z2..arc(0,-180)..z1
+        $group origin(z3)
+            $fill $(circle:10)
+        $group origin(z4), fill white
+            $fill $(circle:10)
 

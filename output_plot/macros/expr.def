@@ -4,6 +4,8 @@ macros:
 
 #---------------------------------------- 
 fncode: parse_expr($l, $macros1, $macros2)
+    $if !$l
+        return
     # $print "parse_expr [$l]"
     $(if:0)
         $foreach %$macros1
@@ -23,7 +25,7 @@ fncode: parse_expr($l, $macros1, $macros2)
         $print "---- dump stack [$n] ----\n"
         $foreach $t in @stack
             print_token($t)
-        die "Unreduced expresion.\n"
+        die "Unreduced expresion [$l].\n"
     return $stack[0]
 
     # ------------
@@ -47,10 +49,10 @@ fncode: parse_expr($l, $macros1, $macros2)
         my $cur
         $if $l=~/\G(\s+)/gc
             next
-        $elif $l=~/\G(\d+(\.\d+)?)/gc
-            $cur = [$1, "num"]
         $elif $l=~/\G(\d+)\/(\d+)/gc
             $cur = [$1/$2, "num"]
+        $elif $l=~/\G(\d+(\.\d+)?)/gc
+            $cur = [$1, "num"]
         $elif $l=~/\G([ijk])%(\d+)/gc
             $cur = [$macros2->{$1} % $2, "num"]
         $elif $l=~/\G([ijk])\/(\d+)/gc
@@ -110,7 +112,7 @@ fncode: parse_expr($l, $macros1, $macros2)
             push @bracket_stack, $match{$(cur_type)}
         $elif $(cur_type) eq ']' or $(cur_type) eq ')'
             $call bracket_close
-        $elif $(cur_type) eq '-' and $(type:-1) !~/num|var|list/
+        $elif $(cur_type) eq '-' and (@stack==0 or $(type:-1) !~/num|var|list/)
             $cur = ["-", "unary"]
 
 
@@ -137,14 +139,14 @@ fncode: parse_expr($l, $macros1, $macros2)
                 $if $t->[1] eq "list" and @{$t->[0]}==2
                     $if $(type:-1) eq "num"
                         my $t2=pop @stack
-                        $cur = do_portion($t2->[0], @{$t->[0]})
+                        $cur = do_portion($t2, @{$t->[0]})
                     $elif $(atom:-1) eq "-"
                         pop @stack
-                        $cur = do_portion(-1, @{$t->[0]})
+                        $cur = do_portion([-1, "num"], @{$t->[0]})
                     $else
-                        die "Error [ ]\n"
+                        die "Error [ ]: wrong scalar\n"
                 $else
-                    die "Error [ ]\n"
+                    die "Error [ ]: type mismatch\n"
 
         # -----------------------
         subcode: check_precedence

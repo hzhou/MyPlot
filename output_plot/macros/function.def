@@ -1,10 +1,7 @@
-fncode: do_function($name, @t)
-    $if $name eq "portion"
-        $if ref($t[1]) eq "ARRAY" 
-            my $t = do_binary("-", $t[2], $t[1])
-            $t = do_binary("*", $t[0], $t)
-            $t = do_binary("+", $t[1], $t)
-            return $t
-        $else
-            die "error in do_function portion..\n"
+fncode: do_portion($a, $t1, $t2)
+    my $t = do_binary("-", $t2, $t1)
+    $t = do_binary("*", $a, $t)
+    $t = do_binary("+", $t1, $t)
+    return $t
 
+fncode: do_function($name, @t)

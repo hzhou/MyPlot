@@ -49,3 +49,10 @@ fncode: encode_utf($t)
             push @t, sprintf("%04X", 0xDC00+$c&0x3F)
     return join('', @t)
         
+#---------------------------------------- 
+fncode: text_at($x, $y, $s)
+    push @$page_content, "BT"
+    push @$page_content, "$x $y Td"
+    push @$page_content, "($s) Tj"
+    push @$page_content, "ET"
+

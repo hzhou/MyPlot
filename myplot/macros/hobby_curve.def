@@ -40,11 +40,19 @@ fncode: solve_path($path)
             my ($dir0, $dirn)
             $if defined $(p:0,dx+)
                 $dir0=atan2($(p:0,dy+), $(p:0,dx+))
+            $elif defined $(p:0,dx)
+                $dir0=atan2($(p:0,dy), $(p:0,dx))
+            $elif defined $(p:0,arc-)
+                $dir0=reduce_angle(($(p:0,arc-)+90)*$(to_rad))
             $elif defined $(p:0,x-)
                 $dir0=atan2($(p:0,y)-$(p:0,y-), $(p:0,x)-$(p:0,x-))
 
             $if defined $(p:$n,dx-)
                 $dirn=atan2($(p:$n,dy-), $(p:$n,dx-))
+            $elif defined $(p:$n,dx)
+                $dirn=atan2($(p:$n,dy), $(p:$n,dx))
+            $elif defined $(p:0,arc+)
+                $dirn=reduce_angle(($(p:$n,arc+)+90)*$(to_rad))
             $elif defined $(p:$n,x+)
                 $dirn=atan2($(p:$n,y+)-$(p:$n,y), $(p:$n,x+)-$(p:$n,x))
 
@@ -187,6 +195,22 @@ fncode: solve_path($path)
             my $sigma=(2-$alpha)/$beta
             $rho *= $a/3
             $sigma *= $b/3
+            $if $(p:$i,tension+)<0 or $(p:$i+1,tension-)<0
+                $call check_least_tension
+            # -------------------------
+            subcode: check_least_tension
+                #-- triangle law: a/sin(A)=b/sin(B)=c/sin(C)=c/sin(A+B)
+                $if $st>=0 && $sf>=0 or $st<=0 && $sf<=0
+                    my $sum=abs($st)*$cf+abs($sf)*$ct
+                    $if $sum>0
+                        $if $(p:$i:tension+)<0
+                            my $thresh=abs($sf)/$sum
+                            $if $rho>$thresh
+                                $rho=$thresh
+                        $if $(p:$i+1:tension-)<0
+                            my $thresh=abs($st)/$sum
+                            $if $sigma>$thresh
+                                $sigma=$thresh
 
 fncode: reduce_angle($t)
     $if abs($t)>3.14159265
@@ -205,4 +229,4 @@ subcode: get_curl(a, var)
 subcode: get_recip(v, tension)
     my $(v)=1
     $if defined $(tension)
-        $(v)=1/$(tension)
+        $(v)=1/abs($(tension))

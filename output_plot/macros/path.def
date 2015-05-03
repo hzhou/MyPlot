@@ -1,10 +1,41 @@
-fncode: parse_path($param)
+fncode: parse_path($param, $info)
+    macros:
+        has: defined $plist->[$1]->{"$2"}
+
     $call check_cycle
+    $param=~s/\.\.\./..tension -1../g
     $param=~s/--/{curl 1}..{curl 1}/g
 
-    my @segs = split /\s*&\s*/, $param
-    $foreach $s in @segs
+    my @segments
+    my @t_segs = split /\s*&\s*/, $param
+    $foreach $s in @t_segs
         $call parse
+
+    my $first_point
+    my $last_point
+    $foreach $plist in @segments
+        my $t="$plist->[0]->{x}, $plist->[0]->{y}"
+        $if $t ne $last_point
+            $call Plot, moveto($t)
+            $if !$first_point
+                $first_point=$t
+        #-------------
+        $if @$plist==1 
+            $if $t ne $last_point
+                $call draw_point
+                undef $first_point
+        $elif @$plist==2 and $(has:0,x+)
+            $call draw_explicit
+        $elif @$plist==2 and $(has:0,arc+) and $(has:1:arc-)
+            $call draw_arc
+        $elif @$plist==2 and !$(has:0,dx+) and !$(has:1,dx-)
+            $call draw_straight
+        $else
+            $call solve
+            $call draw_path
+
+    $if $has_cycle or $first_point eq $last_point
+        $call Plot, close_path()
 
     # -----------------
     subcode: check_cycle
@@ -12,13 +43,55 @@ fncode: parse_path($param)
         $if $param=~/\s*\.\.\s*cycle\s*$/
             $has_cycle=1
             $param=$`;
+        $elif $param=~/\s*--\s*cycle\s*$/
+            $param=$`;
+            $if $param=~/(.*?)(\.\.|--)/
+                $param.="--$1"
+
+    # ---------------------------
+    subcode: draw_point
+        $call Plot, lineto($t)
+        $last_point = $t
+    subcode: draw_explicit
+        my $t=""
+        $t .= $plist->[0]->{"x+"}.", "
+        $t .= $plist->[0]->{"y+"}.", "
+        $t .= $plist->[1]->{"x-"}.", "
+        $t .= $plist->[1]->{"y-"}.", "
+        $last_point = $plist->[1]->{"x"}.", "
+        $last_point .= $plist->[1]->{"y"}
+        $call Plot, curveto($t$last_point)
+    subcode: draw_arc
+        my $t = $plist->[0]->{"x"}.", "
+        $t .= $plist->[0]->{"y"}
+        $last_point = $plist->[1]->{"x"}.", "
+        $last_point .= $plist->[1]->{"y"}
+        my $arc = $plist->[0]->{"arc+"}.", "
+        $arc .= $plist->[1]->{"arc-"}
+        $call Plot, arcto($t, $last_point, $arc)
+    subcode: draw_straight
+        $last_point = $plist->[1]->{"x"}.", "
+        $last_point .= $plist->[1]->{"y"}
+        $call Plot, lineto($last_point)
+    subcode: draw_path
+        $call Plot, do_path(\\\@path, 1)
+        $last_point="$plist->[-1]->{x}, $plist->[-1]->{y}"
+
+    # ---------------------------
+    subcode: solve
+        push @$out, "my \@path;\n"
+        $foreach $t in @$plist
+            my @t
+            $foreach $k in sort keys %$t
+                push @t, "\"$k\"=>$t->{$k}"
+            push @$out, "push \@path, {".join(', ', @t)."};\n"
+        push @$out, "MyPlot::solve_path(\\\@path);\n"
 
     # ------------------
     subcode: parse
-        my @plist
+        my $plist=[]
         my $i=0
-        my $break
-        my @tlist=split /(\.\.(?:(?:tension|controls).*?\.\.)?)/, $s
+        my @tlist=split /(\.\.(?:(?:tension|controls|arc).*?\.\.)?)/, $s
         $foreach $t in @tlist
             $if $t eq ".."
                 next
@@ -26,67 +99,99 @@ fncode: parse_path($param)
                 $call do_tension
             $elif $t=~/^\.\.controls\s*(.*?)\s*\.\.$/
                 $call do_control
+            $elif $t=~/^\.\.arc\s*(.*?)\s*\.\.$/
+                $call do_arc
             $else
                 $call do_point
+                $if $i>0
+                    $call check_break
+                $i++
 
-                $if $plist[$i]->{"x-"}
-                    $break = pop @plist
-                    solve_plist(\@plist)
-                    draw_explicit([$plist[$i-1], $break])
-                    @plist=($break)
-                    $i=1
-                $elif $plist[$i]->{"dx-"} or $plist[$i]->{"curl-"}
-                    $break = $plist[$i]
-                    solve_plist(\@plist)
-                    @plist = ($break)
-                    $i=1
+        $if $i==1 and @tlist>1
+            # last break
+        $else
+            $call wrap_tlist
+
+        # -------------------------------------
+        subcode: check_break
+            $if $(has:$i,x-) or $(has:$i,arc-)
+                my $t=$plist->[$i]
+                $if $i>1
+                    pop @$plist
+                    push @segments, $plist
+                    push @segments, [$plist->[-1], $t]
                 $else
-                    $i++
+                    push @segments, $plist
+                $plist=[$t]
+                $i=0
+            $elif $(has:$i,dx-) or $(has:$i,curl-)
+                my $t=$plist->[$i]
+                push @segments, $plist
+                $plist=[$t]
+                $i=0
 
-        $if $i>1
-            $if @segs==1 and !$break and $has_cycle
-                $plist[0]->{cycle}=1
-            solve_plist(\@plist)
-        $elif !$break and $i==1
-            # draw_point
+        subcode: wrap_tlist
+            $(set:cond) join, " or "
+                !$has_cycle
+                $plist->[-1]->{"dx-"}
+                $plist->[-1]->{"curl-"}
+                $segments[0]->[0]->{"dx-"}
+                $segments[0]->[0]->{"curl-"}
+            $if !@segments
+                $if $has_cycle
+                    $plist->[0]->{cycle}=1
+                push @segments, $plist
+            $elif $(cond)
+                push @segments, $plist
+            $else
+                my $tlist = shift @segments
+                push @$plist, @$tlist
+                push @segments, $plist
 
         # -------------------
         subcode: do_tension
-            $if !$plist[$i]
-                $plist[$i]={}
-            my $tt=$1
+            $call do_in_between
             $if $tt=~/^(\S+)\s*and\s*(\S+)$/
-                $plist[$i-1]->{"tension+"}=$1
-                $plist[$i]->{"tension-"}=$2
+                $plist->[$i-1]->{"tension+"}=$1
+                $plist->[$i]->{"tension-"}=$2
             $else
-                $plist[$i-1]->{"tension+"}=$tt
-                $plist[$i]->{"tension-"}=$tt
+                $plist->[$i-1]->{"tension+"}=$tt
+                $plist->[$i]->{"tension-"}=$tt
 
         subcode: do_control
-            $if !$plist[$i]
-                $plist[$i]={}
-            my $tt=$1
+            $call do_in_between
             $if $tt=~/^(\S+)\s*and\s*(\S+)$/
                 my ($t1, $t2)=($1, $2)
                 my ($x, $y)=parse_point($t1)
-                $plist[$i-1]->{"x+"}=$x
-                $plist[$i-1]->{"y+"}=$y
+                $plist->[$i-1]->{"x+"}=$x
+                $plist->[$i-1]->{"y+"}=$y
                 my ($x, $y)=parse_point($t2)
-                $plist[$i]->{"x-"}=$x
-                $plist[$i]->{"y-"}=$y
+                $plist->[$i]->{"x-"}=$x
+                $plist->[$i]->{"y-"}=$y
             $else
                 die "single control point not supported\n"
 
+        subcode: do_arc
+            $call do_in_between
+            $if $tt=~/\((\S+),\s*(\S+)\s*\)/
+                $plist->[$i-1]->{"arc+"}=$1
+                $plist->[$i]->{"arc-"}=$2
+
+        # ----
+        subcode: do_in_between
+            $if !$plist->[$i]
+                $plist->[$i]={}
+            my $tt=$1
         # -------------------
         subcode: do_point
-            $if !$plist[$i]
-                $plist[$i]={}
+            $if !$plist->[$i]
+                $plist->[$i]={}
             $call get_t1_t2
             $call do_dir_1
             $call do_dir_2
             my ($x, $y)=parse_point($t)
-            $plist[$i]->{x}=$x
-            $plist[$i]->{y}=$y
+            $plist->[$i]->{x}=$x
+            $plist->[$i]->{y}=$y
 
             # -------------
             subcode: get_t1_t2
@@ -105,139 +210,24 @@ fncode: parse_path($param)
             subcode: do_dir_1
                 $if $t1
                     $if $t1=~/curl\s*(\S+)/
-                        $plist[$i]->{"curl-"}=$1
+                        $plist->[$i]->{"curl-"}=$1
                         $if !$t2
-                            $plist[$i]->{"curl+"}=$1
+                            $plist->[$i]->{"curl+"}=$1
                     $else
-                        my ($x, $y)=parse_dir($t)
-                        $plist[$i]->{"dx-"}=$x
-                        $plist[$i]->{"dy-"}=$y
+                        my ($x, $y)=parse_dir($t1)
                         $if !$t2
-                            $plist[$i]->{"dx+"}=$x
-                            $plist[$i]->{"dy+"}=$y
+                            $plist->[$i]->{"dx"}=$x
+                            $plist->[$i]->{"dy"}=$y
+                        $else
+                            $plist->[$i]->{"dx-"}=$x
+                            $plist->[$i]->{"dy-"}=$y
             subcode: do_dir_2
                 $if $t2
                     $if $t2=~/curl\s*(\S+)/
-                        $plist[$i]->{"curl+"}=$1
+                        $plist->[$i]->{"curl+"}=$1
                     $else
                         my ($x, $y)=parse_dir($t2)
-                        $plist[$i]->{"dx+"}=$x
-                        $plist[$i]->{"dy+"}=$y
+                        $plist->[$i]->{"dx+"}=$x
+                        $plist->[$i]->{"dy+"}=$y
 
-
-#---------------------------------------- 
-fncode: parse_point($t)
-    my $exp = parse_expr($t, {}, {})
-    $if $exp->[1] ne "list"
-        die "point parsing error: [$t]\n"
-
-    my @t
-    $for $i=0:2
-        my $t=$exp->[0]->[$i]
-        $if $t->[1] eq "var"
-            $t[$i]=get_var_string($t)
-        $elif $t->[1] eq "num"
-            $t[$i]=$t->[0]
-        $else
-            die "parse_point illegal type [$t]\n"
-    return @t
-
-fncode: parse_dir($t)
-    my ($x, $y)
-    $if $t eq "left"
-        ($x, $y)=(-1,0)
-    $elif $t eq "right"
-        ($x, $y)=(1,0)
-    $elif $t eq "up"
-        ($x, $y)=(0,1)
-    $elif $t eq "down"
-        ($x, $y)=(0,-1)
-    $elif $t=~/dir\s*(\S+)/
-        ($x, $y)=(cos($1), sin($1))
-    $else
-        ($x, $y)=parse_point($t)
-        my $d = sqrt($x**2+$y**2)
-        $x/=$d
-        $y/=$d
-    return ($x, $y)
-
-#---------------------------------------- 
-fncode: draw_explicit($plist)
-    $call moveto, 0
-    $call curveto, 1
-
-fncode: solve_plist($plist)
-    my $n=@$plist
-
-    $if $n==0
-        return
-    $elif $n==1
-        return
-    $elif $n==2 && !$plist->[0]->{"dx+"} && !$plist->[1]->{"dx-"}
-        $call moveto, 0
-        $call lineto, 1
-    $else
-        $call solve
-        $call draw
-
-    subcode: solve
-        push @$out, "my \@path;\n"
-        $foreach $t in @$plist
-            my @t
-            $foreach $k in sort keys %$t
-                push @t, "\"$k\"=>$t->{$k}"
-            push @$out, "push \@path, {".join(', ', @t)."};\n"
-        push @$out, "MyPlot::solve_path(\\\@path);\n"
-
-    subcode: draw
-        my $t="$plist->[0]->{x}, $plist->[0]->{y}"
-        $if $last_point ne $t
-            push @$out, "MyPlot::do_path(\$page_content, \\\@path, 0);\n"
-        $else
-            push @$out, "MyPlot::do_path(\$page_content, \\\@path, 1);\n"
-        $if !$plist->[0]->{cycle}
-            $last_point="$plist->[-1]->{x}, $plist->[-1]->{y}"
-        $else
-            undef $last_point
-
-#---------------------------------------- 
-subcode: _autoload
-    $global $first_point, $last_point
-
-subcode: moveto(i)
-    my $t="$plist->[$(i)]->{x}, $plist->[$(i)]->{y}"
-    $if $last_point ne $t
-        MyDef::compileutil::call_sub("moveto, $t")
-    $if !$first_point
-        $first_point=$t
-
-subcode: lineto(i)
-    my $t="$plist->[$(i)]->{x}, $plist->[$(i)]->{y}"
-    MyDef::compileutil::call_sub("lineto, $t")
-    $last_point=$t
-
-subcode: curveto(i)
-    my $t="$plist->[$(i)]->{x}, $plist->[$(i)]->{y}"
-    my $j=$(i)-1
-    my $t2=""
-    $t2 .= $plist->[$j]->{"x+"}.", "
-    $t2 .= $plist->[$j]->{"y+"}.", "
-    $t2 .= $plist->[$(i)]->{"x-"}.", "
-    $t2 .= $plist->[$(i)]->{"y-"}.", "
-    MyDef::compileutil::call_sub("curveto, $t2 $t")
-    $last_point=$t
-
-subcode: path_curveto(i)
-    my $t="$plist->[$(i)]->{x}, $plist->[$(i)]->{y}"
-    $(if:i=0)
-        my $j=$n-1
-    $(else)
-        my $j=$(i)-1
-    my $t2=""
-    $t2 .= "\$path[$j]->{\"x+\"}, "
-    $t2 .= "\$path[$j]->{\"y+\"}, "
-    $t2 .= "\$path[$(i)]->{\"x-\"}, "
-    $t2 .= "\$path[$(i)]->{\"y-\"}, "
-    MyDef::compileutil::call_sub("curveto, $t2 $t")
-    $last_point=$t
 

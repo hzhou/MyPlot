@@ -1,5 +1,7 @@
 include: macros/write_pdf.def
+include: macros/graphics.def
 include: macros/font.def
+include: macros/text.def
 include: macros/hobby_curve.def
 include: macros/label.def
 
@@ -13,6 +15,9 @@ page: MyPlot
 
 	#---- expose to graphic composer ----
 	$global $page_width, $page_height, $page_margin
+
+        #---- cur --------------------
+        $global $page_content
 
 	1;
 
@@ -33,51 +38,13 @@ fncode: newpage
     $page_fonts=$page->{fonts}
     $page_xobjs=$page->{xobjs}
     push @page_list, $page
-    return $page->{content}
+
+    $page_content=$page->{content}
+
+    $call @page_init
 
 subcode: update_page_xobjs
     push @$page_xobjs, $xobj
-
-#---- fonts ------------------------------------ 
-fncode: find_font($title)
-    $call @check_font_hash
-    my $font=$font_hash{$title}
-    $call @update_page_fonts
-
-    my $metric=$font_metrics{$title}
-    $if $metric
-        $foreach $key in "isfixed", "width", "start", "count", "metrics"
-            $if $metric->{$key}
-                $font->{$key}=$metric->{$key}
-    return $font
-
-    # -----------------
-    subcode: check_font_hash
-        $global %font_hash
-        $if !$font_hash{$title}
-            my $n=@font_list
-            $n++
-            my $font={BaseFont=>$title, Name=>"F$n"}
-            $call check_specific_fonts
-            push @font_list, $font
-            $font_hash{$title}=$font
-
-    subcode: update_page_fonts
-        $if !$page_font_hash{$title}
-            push @$page_fonts, $font
-            $page_font_hash{$title}=1
-
-    # ------------------------------
-    subcode:: check_specific_fonts
-        $case $title =~ /Sim(Sun|Hei)/
-            $font->{isfixed}=1
-            $font->{width}=1000
-            $font->{iswide}=1
-
-    subcode:: check_specific_fonts
-        $case $title =~/\.ttf$/i
-            load_ttf($font, $title)
-	
 
 #---- XObjects ------------------------------
 fncode: add_jpg($file, $w, $h, $bpp)
@@ -135,102 +102,3 @@ fncode: get_color_statement($name)
     $elif $name=~/^(0\.\d+)\s+(0\.\d+)\s+(0\.\d+)$/
         return (1, "$1 $2 $3")
 
-fncode: stroke_color($page_content, $name)
-    my ($space, $color)=get_color_statement($name)
-    $if $space==0
-	push @$page_content, "$color G"
-    $elif $space==1
-	push @$page_content, "$color RG"
-    $elif $space==2
-	push @$page_content, "$color K"
-
-fncode: fill_color($page_content, $name)
-    my ($space, $color)=get_color_statement($name)
-    $if $space==0
-	push @$page_content, "$color g"
-    $elif $space==1
-	push @$page_content, "$color rg"
-    $elif $space==2
-	push @$page_content, "$color k"
-
-#---- path  ------------------------------------ 
-fncode: moveto($page_content, $x, $y)
-    push @$page_content, "$x $y m"
-
-fncode: lineto($page_content, $x, $y)
-    push @$page_content, "$x $y l"
-
-fncode: curveto($page_content, $x1, $y1, $x2, $y2, $x3, $y3)
-    push @$page_content, "$x1 $y1 $x2 $y2 $x3 $y3 c"
-
-fncode: close_path($page_content)
-    push @$page_content, "h"
-
-fncode: do_path($page_content, $path, $skip_first)
-    my $n=@$path
-    $(set:p=$path->[$i]->{"$1"})
-    $(set:p2=$path->[$i+1]->{"$1"})
-    $(set:p0=$path->[0]->{"$1"})
-    $(set:pn=$path->[$n-1]->{"$1"})
-    $if !$skip_first
-        moveto($page_content, $(p0:x), $(p0:y))
-    $for $i=0:$n-1
-        $if $(p:x+)
-            curveto($page_content, $(p:x+), $(p:y+), $(p2:x-), $(p2:y-), $(p2:x), $(p2:y))
-        $else
-            lineto($page_content, $(p2:x), $(p2:y))
-    $if $(p0:cycle)
-        curveto($page_content, $(pn:x+), $(pn:y+), $(p0:x-), $(p0:y-), $(p0:x), $(p0:y))
-    $if $(p0:close)
-        lineto($page_content, $(p0:x), $(p0:y))
-
-#---------------------------------------- 
-fncode: text_at($page_content, $x, $y, $s)
-    push @$page_content, "BT"
-    push @$page_content, "$x $y Td"
-    push @$page_content, "($s) Tj"
-    push @$page_content, "ET"
-
-#---- graphics -----------------------------
-fncode: line_width($page_content, $w)
-    push @$page_content, "$w w"
-
-fncode: line_cap($page_content, $m)
-    $global %linecaps=(butt=>0, round=>1, square=>2)
-    my $linecap
-    $if $m>0
-        $linecap=$m
-    $elif exists $linecaps{$m}
-        $linecap=$linecaps{$m}
-    $else
-        $linecap=0
-    push @$page_content, "$linecap J"
-
-fncode: line_join($page_content, $m)
-    $global %linejoins=(miter=>0, round=>1, bevel=>2)
-    my $linejoin
-    $if $m>0
-        $linejoin=$m
-    $elif exists $linejoins{$m}
-        $linejoin=$linejoins{$m}
-    $else
-        $linejoin=0
-    push @$page_content, "$linejoin j"
-
-fncode: line_dash($page_content, $m)
-    my $linedash
-    $if $m==1
-        $linedash="3"
-    $elif $m==2
-        $linedash="6 3"
-    $elif $m==3
-	$linedash="8 7 2 7"
-    $else
-        $linedash=""
-    push @$page_content, "[$linedash] 0 d"
-
-fncode: save_state($page_content)
-    push @$page_content, "q"
-
-fncode: restore_state($page_content)
-    push @$page_content, "Q"

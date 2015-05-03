@@ -10,17 +10,22 @@ subcode: basic_frame(@outname)
         $call main2
 
 
+#---------------------------------------- 
+#- Common Shapes
+#---------------------------------------- 
+
+macros:
+    circle: (-$1,0)..(0,-$1)..($1,0)..(0,$1)..cycle
+    square: (0,0)--($1,0)--($1,$1)--(0,$1)--cycle
+
 #----------------------------------------
 #- Graphic State
 #-    CTM, clippingpath, colorspace, color, textstate
 #-    linewidth, linecap, linejoin, dashpattern 
 #----------------------------------------
 
-#---- exposed: $page_content
 subcode: newpage
-    $global $page_content
-    $page_content=$(PLOT)::newpage()
-    $call @default_graphic_state
+    $(PLOT)::newpage()
 
 subcode: open_pdf(f)
     $(if:f~")
@@ -33,80 +38,6 @@ subcode: open_pdf(f)
 	print " --> $(f)\n"
 
 #---------------------------------------- 
-
-subcode: save_graphic_state
-    $(PLOT)::save_state($page_content)
-    BLOCK
-    $(PLOT)::restore_state($page_content)
-
-subcode: default_graphic_state
-    $call linewidth, 2
-    $call linecap, round
-    $call linejoin, round
-
-#---------------------------------------- 
-subcode: linewidth(w)
-    $(PLOT)::line_width($page_content, $(w))
-
-subcode: linecap(m)
-    $(PLOT)::line_cap($page_content, "$(m)")
-
-subcode: linejoin(m)
-    $(PLOT)::line_join($page_content, "$(m)")
-
-subcode: linedash(m)
-    $(PLOT)::linedash($page_content, $(m))
-
-#---------------------------------------- 
-subcode: linecolor(@name)
-    $call strokecolor, $(name)
-
-subcode: strokecolor(@name)
-    $(PLOT)::stroke_color($page_content, "$(name)")
-
-subcode: fillcolor(@name)
-    $(PLOT)::fill_color($page_content, "$(name)")
-
-#---------------------------------------- 
-subcode: moveto(x, y)
-    $(PLOT)::moveto($page_content, $(x), $(y))
-
-subcode: lineto(x, y)
-    $(PLOT)::lineto($page_content, $(x), $(y))
-
-subcode: curveto(x1, y1, x2, y2, x3, y3)
-    $(PLOT)::curveto($page_content,$(x1), $(y1), $(x2), $(y2), $(x3), $(y3))
-
-subcode: closepath
-    $(PLOT)::close_path($page_content)
-
-#---------------------------------------- 
-subcode: setdraw(draw)
-    $(export:draw)
-
-subcode: draw
-    $(if:draw=stroke)
-	push @$page_content, "S"
-    $(elif:draw=fill)
-	push @$page_content, "f"
-    $(elif:draw=fillstroke)
-	push @$page_content, "B"
-    $(elif:draw=clip)
-	push @$page_content, "W n"
-    $(elif:draw=clipstroke)
-	push @$page_content, "W S"
-    $(else)
-	push @$page_content, "S"
-
-subcode: newpath
-    BLOCK
-    push @$page_content, "S"
-
-subcode: newshape
-    BLOCK
-    $call closepath
-    $call draw
-
 subcode: rect(x, y, w, h)
     push @$page_content, join " ", $(x), $(y), $(w), $(h), "re"
     $call draw
@@ -120,20 +51,6 @@ subcode: circle(x0, y0, r)
         $call curveto, $(x0)-$c, $(y0)-$(r), $(x0)-$(r), $(y0)-$c, $(x0)-$(r), $(y0)
         $call curveto, $(x0)-$(r), $(y0)+$c, $(x0)-$c, $(y0)+$(r), $(x0), $(y0)+$(r)
     $call draw
-
-#---- Transformation ------------------------------------ 
-subcode: translate(x, y)
-    push @$page_content, join ' ', "1 0 0 1", $(x), $(y), "cm"
-
-subcode: scale(scale)
-    push @$page_content, join ' ', $(scale), "0 0", $(scale), "0 0 cm"
-
-subcode: rotate(a)
-    my $t=$(a)/180.0*3.14159265
-    my $C=cos($t)
-    my $S=sin($t)
-    my $S2=-$S
-    push @$page_content, "$C $S $S2 $C 0 0 cm"
 
 #---- Text ------------------------------------ 
 subcode: setfont(name, size)

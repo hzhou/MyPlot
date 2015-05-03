@@ -49,7 +49,7 @@ fncode: parse_eqn($left, $right, $macro, $points)
 
     subcode: push_eqn
         $foreach $k in @t
-            $if $k ne "1" and !exist($eqn_vars{$k})
+            $if $k ne "1" and !exists($eqn_vars{$k})
                 $eqn_vars{$k}=1
                 $n_var++
         push @eqn_list, \%t
