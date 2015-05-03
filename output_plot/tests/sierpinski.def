@@ -1,13 +1,13 @@
 page: sierpinski, basic_frame, t.pdf
     my $str="A"
     my ($x, $y)=(10,10)
-    my $step=2
+    my $step=10
 
-    $for $i=0:8
+    $for $i=0:4
         $call expand
         # $print $i: [$str]
 
-    $line cyan
+    $line #2222ff
     $call plot
     MyPlot::stroke()
 
