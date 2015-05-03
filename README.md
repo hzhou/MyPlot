@@ -26,7 +26,7 @@ page: test, basic_frame, t.pdf
         $(for:i in 0,1,2)
             $(for:j in 0,1,2)
                 $draw z$(i)$(j)
-        #---- CSS style style but imperative ----
+        #---- CSS like free style but imperative ----
         $line 2, black
         #---- metafont line syntax ----
         $draw z22--z00--z03--z30--z00
