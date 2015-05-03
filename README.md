@@ -1,3 +1,6 @@
+* [ref] [MyDef](http://huizhou.gitbooks.io/programming-with-mydef/content/Installing.html)
+* [ref] [curve](http://hz2.org/blog/hobby_curve.html)
+
 ### MyPlot.pm
 
 Currently a Perl PDF library. Eventually this will be a general plotting library with multiple output modules (pdf, eps, windows, ...), like gnuplot.
