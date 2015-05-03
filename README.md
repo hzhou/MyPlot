@@ -18,8 +18,8 @@ page: test, basic_frame, t.pdf
         $(for:i in 0,1,2)
             $(for:j in 0,1,2)
                 $draw ($(i)u, $(j)u)
-    $line 2, black
-    $draw (2u,2u)--(0,0)--(0,3u)--(3u,0)--(0,0)
+        $line 2, black
+        $draw (2u,2u)--(0,0)--(0,3u)--(3u,0)--(0,0)
 ```
 
 ```
