@@ -5,7 +5,8 @@ subcode: fig_1
     #-- 9 trees
     $set_point i=0:4, j=0:4, u=100
         zij=(i*u,j*u)
-    $group origin (200, 300), 10pt, gray
+    $group origin (200, 300)
+        $line 10pt, gray
         $(for:i in 0,1,2)
             $(for:j in 0,1,2)
                 $draw z$(i)$(j)

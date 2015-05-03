@@ -1,0 +1,31 @@
+include: LSystem.def
+
+page: test, basic_frame, t.pdf
+    # $call sierpinski, 6
+    $call plant, 4
+
+subcode: plant(iter)
+    $rule{X}="F-[[X]+X]+F[+FX]-X"
+    $rule{F}="FF"
+    $call lsystem, X
+
+    subcode: set_plot
+        my ($x, $y)=(10,10)
+        my $step = 4
+        my $dir = 60
+        my $dir_step = 25
+
+subcode: sierpinski(iter)
+    $rule{A} = "B-A-B"
+    $rule{B} = "A+B+A"
+
+    $call lsystem, A
+
+    subcode: set_color
+        $line blue
+
+    subcode: set_plot
+        my ($x, $y)=(10,10)
+        my $step = 4
+        my $dir = 0
+        my $dir_step = 60

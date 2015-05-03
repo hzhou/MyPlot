@@ -1,0 +1,62 @@
+subcode: lsystem(init)
+    $global %rule
+    my $s="$(init)"
+    $for $i=0:$(iter)
+        $call expand
+
+    $call @set_color
+
+    my @stack
+    # my ($x, $y)=(10,10)
+    # my $dir=0
+    # my $dir_step=60
+    $call @set_plot
+
+    $call plot
+
+subcode: expand
+    my $s2=""
+    &call each_char, $s
+        $if $rule{$c}
+            $s2.=$rule{$c}
+        $else
+            $s2.=$c
+    $s = $s2
+
+subcode: plot
+    my @stack
+    MyPlot::moveto($x,$y)
+    &call each_char, $s
+        # $print -- c=$c
+        $if $c ge 'A' && $c le 'G'
+            $call get_pos
+            MyPlot::lineto($x,$y)
+        $elif $c eq '+'
+            $dir+=$dir_step
+        $elif $c eq '-'
+            $dir-=$dir_step
+        $elif $c eq '['
+            push @stack, [$x, $y, $dir]
+        $elif $c eq ']'
+            my $t=pop @stack
+            ($x, $y, $dir)=@$t
+            MyPlot::moveto($x, $y)
+    MyPlot::stroke()
+
+#---------------------------------------- 
+subcode: get_pos
+    $x+=cos($dir*3.1415926535/180.0) *$step
+    $y+=sin($dir*3.1415926535/180.0) *$step
+
+subcode: each_char(s)
+    my $n=length($(s))
+    $for $i=0:$n
+        my $c=substr($(s), $i, 1)
+        BLOCK
+
+#---------------------------------------- 
+subcode: set_plot
+    my ($x, $y)=(0,0)
+    my $step = 10
+    my $dir = 0
+    my $dir_step =90
