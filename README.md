@@ -17,13 +17,18 @@ Perl EPS macros.
 [Showing some DSL syntax]
 ```
 page: test, basic_frame, t.pdf
+    #---- metafont type of algebra ----
     $set_point i=0:4, j=0:4, u=100
         zij=(i*u,j*u)
+    #---- CSS type of styling ----
     $group origin (200, 300), 10pt, gray
+        #---- standard MyDef macros ----
         $(for:i in 0,1,2)
             $(for:j in 0,1,2)
                 $draw z$(i)$(j)
+        #---- CSS style style but imperative ----
         $line 2, black
+        #---- metafont line syntax ----
         $draw z22--z00--z03--z30--z00
 ```
 
@@ -40,7 +45,7 @@ Explore output_plot/tests/ for more.
 
 ## Example 2 (Sierpinsky)
 
-[You don't need learn special syntax to start, you can simply write Perl.]
+Or symply Perl programming.
 ```
 page: sierpinski, basic_frame, t.pdf
     my $str="A"
