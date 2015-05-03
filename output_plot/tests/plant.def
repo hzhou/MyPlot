@@ -1,0 +1,54 @@
+page: plant, basic_frame, t.pdf
+    my $str="X"
+    my ($x, $y)=(10,20)
+    my $step=1
+
+    $for $i=0:8
+        $call expand
+        # $print $i: [$str]
+
+    $call plot
+    MyPlot::stroke()
+
+subcode: expand
+    my $s_out=""
+    &call each_char, $str
+        $if $c eq 'X'
+            $s_out.="F-[[X]+X]+F[+FX]-X"
+        $elif $c eq 'F'
+            $s_out.="FF"
+        $else
+            $s_out.=$c
+    $str=$s_out
+
+subcode: plot
+    my @stack
+    my $dir=60
+    MyPlot::moveto($x,$y)
+    &call each_char, $str
+        # $print -- c=$c
+        $if $c eq 'F'
+            $call get_pos
+            MyPlot::lineto($x,$y)
+        $elif $c eq '+'
+            $dir+=25
+        $elif $c eq '-'
+            $dir-=25
+        $elif $c eq '['
+            push @stack, [$x, $y, $dir]
+        $elif $c eq ']'
+            my $t=pop @stack
+            ($x, $y, $dir)=@$t
+            MyPlot::moveto($x, $y)
+
+
+subcode: get_pos
+    $x+=cos($dir*3.1415926535/180.0) *$step
+    $y+=sin($dir*3.1415926535/180.0) *$step
+
+#---------------------------------------- 
+subcode: each_char(s)
+    my $n=length($(s))
+    $for $i=0:$n
+        my $c=substr($(s), $i, 1)
+        BLOCK

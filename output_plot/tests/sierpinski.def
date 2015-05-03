@@ -1,0 +1,48 @@
+page: sierpinski, basic_frame, t.pdf
+    my $str="A"
+    my ($x, $y)=(10,10)
+    my $step=2
+
+    $for $i=0:8
+        $call expand
+        # $print $i: [$str]
+
+    $line cyan
+    $call plot
+    MyPlot::stroke()
+
+subcode: expand
+    my $s_out=""
+    &call each_char, $str
+        $if $c eq 'A'
+            $s_out.="B-A-B"
+        $elif $c eq 'B'
+            $s_out.="A+B+A"
+        $else
+            $s_out.=$c
+    $str=$s_out
+
+subcode: plot
+    my @stack
+    my $dir=0
+    MyPlot::moveto($x,$y)
+    &call each_char, $str
+        # $print -- c=$c
+        $if $c eq 'A' or $c eq 'B'
+            $call get_pos
+            MyPlot::lineto($x,$y)
+        $elif $c eq '+'
+            $dir+=60
+        $elif $c eq '-'
+            $dir-=60
+
+subcode: get_pos
+    $x+=cos($dir*3.1415926535/180.0) *$step
+    $y+=sin($dir*3.1415926535/180.0) *$step
+
+#---------------------------------------- 
+subcode: each_char(s)
+    my $n=length($(s))
+    $for $i=0:$n
+        my $c=substr($(s), $i, 1)
+        BLOCK

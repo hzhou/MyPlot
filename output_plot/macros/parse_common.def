@@ -1,0 +1,49 @@
+
+#---------------------------------------- 
+fncode: parse_point($t)
+    my $exp = parse_expr($t, $g_hash->{macro}, {})
+    $if $exp->[1] ne "list"
+        die "point parsing error: [$t]\n"
+
+    my @t
+    $for $i=0:2
+        my $t=$exp->[0]->[$i]
+        $if $t->[1] eq "var"
+            $t[$i]=get_var_string($t)
+        $elif $t->[1] eq "num"
+            $t[$i]=$t->[0]
+        $else
+            die "parse_point illegal type [$t]\n"
+    return @t
+
+fncode: parse_dir($t)
+    my ($x, $y)
+    $if $t eq "left"
+        ($x, $y)=(-1,0)
+    $elif $t eq "right"
+        ($x, $y)=(1,0)
+    $elif $t eq "up"
+        ($x, $y)=(0,1)
+    $elif $t eq "down"
+        ($x, $y)=(0,-1)
+    $elif $t=~/dir\s*(\S+)/
+        my $t=$1
+        my $u=3.1415926/180
+        $if $t=~/^[0-9.]+$/
+            ($x, $y)=(cos($t), sin($t))
+        $else
+            ($x, $y)=("cos($t*$u)", "sin($t*$u)")
+    $else
+        ($x, $y)=parse_point($t)
+        $if $x==0 and $y==0
+            die "Error in parse_dir[$t]\n"
+        my $d = sqrt($x**2+$y**2)
+        $x/=$d
+        $y/=$d
+    return ($x, $y)
+
+fncode: parse_edge($t)
+    my ($t1, $t2)=MyDef::utils::proper_split($t)
+    my ($x1, $y1)=parse_point($t1)
+    my ($x2, $y2)=parse_point($t2)
+    return ($x1, $y1, $x2, $y2)

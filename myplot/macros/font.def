@@ -1,0 +1,52 @@
+#---- fonts ------------------------------------ 
+fncode: find_font($title)
+    $call @check_font_hash
+    my $font=$font_hash{$title}
+    $call @update_page_fonts
+
+    my $metric=$font_metrics{$title}
+    $if $metric
+        $foreach $key in "isfixed", "width", "start", "count", "metrics"
+            $if $metric->{$key}
+                $font->{$key}=$metric->{$key}
+    return $font
+
+    # -----------------
+    subcode: check_font_hash
+        $global %font_hash
+        $if !$font_hash{$title}
+            my $n=@font_list
+            $n++
+            my $font={BaseFont=>$title, Name=>"F$n"}
+            $call check_specific_fonts
+            push @font_list, $font
+            $font_hash{$title}=$font
+
+    subcode: update_page_fonts
+        $if !$page_font_hash{$title}
+            push @$page_fonts, $font
+            $page_font_hash{$title}=1
+
+    # ------------------------------
+    subcode:: check_specific_fonts
+        $case $title =~ /Sim(Sun|Hei)/
+            $font->{isfixed}=1
+            $font->{width}=1000
+            $font->{iswide}=1
+
+    subcode:: check_specific_fonts
+        $case $title =~/\.ttf$/i
+            load_ttf($font, $title)
+	
+
+#---------------------------------------- 
+subcode: _autoload
+    $global %config
+    $config{label_font}="Helvetica"
+
+fncode: set_font($ft, $size)
+    $global $last_font
+    my $t="$ft->{Name} $size"
+    $if $last_font ne $t
+        $last_font=$t
+        push @$page_content, "/$t Tf"

@@ -1,0 +1,56 @@
+page: dragon, basic_frame, t.pdf
+    my $str = "FX"
+    $for $i=0:15
+        $call expand
+        # $print $i: [$str]
+
+    $call plot
+    MyPlot::stroke()
+
+subcode: expand
+    my $s_out=""
+    &call each_char, $str
+        $if $c eq 'X'
+            $s_out.="X+YF+"
+        $elif $c eq 'Y'
+            $s_out.="-FX-Y"
+        $else
+            $s_out.=$c
+    $str=$s_out
+
+subcode: plot
+    my ($x, $y)=(200,600)
+    my $step=2
+
+    my $dir=0
+    MyPlot::moveto($x,$y)
+    &call each_char, $str
+        # $print -- c=$c
+        $if $c eq 'F'
+            $call get_pos
+            MyPlot::lineto($x,$y)
+        $elif $c eq '+'
+            $dir++
+            $if $dir>3
+                $dir=0
+        $elif $c eq '-'
+            $dir--
+            $if $dir<0
+                $dir=3
+
+subcode: get_pos
+    $if $dir==0
+        $x+=$step
+    $elif $dir==1
+        $y+=$step
+    $elif $dir==2
+        $x-=$step
+    $elif $dir==3
+        $y-=$step
+
+#---------------------------------------- 
+subcode: each_char(s)
+    my $n=length($(s))
+    $for $i=0:$n
+        my $c=substr($(s), $i, 1)
+        BLOCK

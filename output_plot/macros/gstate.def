@@ -1,0 +1,141 @@
+subcode:: _autoload
+    $global @g_stack
+    $global $g_hash={}
+
+fncode: check_default($type)
+    $if $type eq "draw"
+        $if !$g_hash->{linewidth}
+            $g_hash->{linewidth}=2
+            $call Plot, line_width(2)
+        $if !$g_hash->{linecap}
+            $g_hash->{linecap}="round"
+            $call Plot, line_cap('round')
+            $call Plot, line_join('round')
+            # $call Plot, stroke_gray(0.5)
+
+#---- graphic state ------------------------------------ 
+subcode:: parse_func
+    $case $func eq "line" or $func eq "style"
+        parse_graphic_state($param, $func)
+        return 0
+    $case $func eq "group"
+        check_default("draw")
+        push @g_stack, $g_hash
+        my %t=%$g_hash
+        $g_hash=\%t
+        $g_hash->{cm}=undef
+        $g_hash->{macro}={}
+        $call Plot, save_state()
+        parse_graphic_state($param, "group")
+        return $(super:single_block_pre_post)([], ["PARSE:\$ungroup"], "group")
+    $case $func eq "ungroup"
+        $g_hash=pop @g_stack
+        $call Plot, restore_state()
+        return 0
+
+#---------------------------------------- 
+fncode: parse_graphic_state($param)
+    my $cm_changed
+    my @tlist = MyDef::utils::proper_split($param)
+    $foreach $t in @tlist
+        $if $t=~/^(\d[0-9.]*)(pt)?/
+            $g_hash->{linewidth}=$1
+            $call Plot, line_width($1)
+        $elif $colornames{$t} or $t=~/^#/
+            $call parse_color, line
+        $elif $t=~/fill\s*(.*)/
+            $t=$1
+            $call parse_color, fill
+        $elif $t=~/origin\s*\((.*)\)/
+            my ($x, $y)=parse_point($1)
+            $call cm_translate, $x, $y
+        $elif $t=~/rotate\s*(.*)/
+            $call cm_rotate, $1
+        $elif $t=~/scale\s*\((.*)\)/
+            my ($x, $y)=parse_point($1)
+            $call cm_scale, $x, $y
+        $elif $t=~/scale\s*(.*)/
+            $call cm_scale, $1, $1
+        $elif $t=~/skew\s*\((.*)\)/
+            my ($x, $y)=parse_point($1)
+            $call cm_skew, $x, $y
+        $elif $t=~/skew\s*(.*)/
+            $call cm_skew, $1, $1
+        $elif $t=~/(\w+)=([0-9\.]+)/
+            $g_hash->{macro}->{$1}=$2
+
+    $if $cm_changed
+        my $t=join(', ', @{$g_hash->{cm}})
+        $call Plot, set_matrix($t)
+
+    # ----------------------
+    subcode: parse_color(type)
+        $if $colornames{$t}
+            $t = $colornames{$t}
+        $if $t=~/^#(..)(..)(..)/
+            $if $1 eq $2 and $1 eq $3
+                my $t=sprintf("%.2f", hex($1)/255)
+                $(if:type=line)
+                    $call Plot, stroke_gray($t)
+                $(elif:type=fill)
+                    $call Plot, fill_gray($t)
+            $else
+                my $r=sprintf("%.2f",hex($1)/255)
+                my $g=sprintf("%.2f",hex($2)/255)
+                my $b=sprintf("%.2f",hex($3)/255)
+                $(if:type=line)
+                    $call Plot, stroke_rgb($r, $g, $b)
+                $(elif:type=fill)
+                    $call Plot, fill_rgb($r, $g, $b)
+    # ------------------------
+    subcode: cm_translate(x,y)
+        $if !$g_hash->{cm}
+            $g_hash->{cm}=[1, 0, 0, 1, $(x), $(y)]
+        $else
+            my $cm = $g_hash->{cm}
+            $cm->[4]+=$cm->[0]*$(x)+$cm->[1]*$(y)
+            $cm->[5]+=$cm->[2]*$(x)+$cm->[3]*$(y)
+        $cm_changed=1
+
+    subcode: cm_rotate(t)
+        my $th=$(t)*3.14159265/180
+        my $C=cos($th)
+        my $S=sin($th)
+        $if !$g_hash->{cm}
+            $g_hash->{cm}=[$C, $S, -$S, $C, 0, 0]
+        $else
+            my $cm = $g_hash->{cm}
+            my $a0 = $cm->[0]*$C-$cm->[1]*$S
+            my $a1 = $cm->[0]*$S+$cm->[1]*$C
+            my $a2 = $cm->[2]*$C-$cm->[3]*$S
+            my $a3 = $cm->[2]*$S+$cm->[3]*$C
+            $(for:i in 0,1,2,3)
+                $cm->[$(i)]=$a$(i)
+        $cm_changed=1
+
+    subcode: cm_scale(x, y)
+        $if !$g_hash->{cm}
+            $g_hash->{cm}=[$(x), 0, 0, $(y), 0, 0]
+        $else
+            my $cm = $g_hash->{cm}
+            $cm->[0]*=$(x)
+            $cm->[1]*=$(y)
+            $cm->[2]*=$(x)
+            $cm->[3]*=$(y)
+        $cm_changed=1
+
+    subcode: cm_skew(a, b)
+        my $ta=tan($(a)*3.14159265/180)
+        my $tb=tan($(b)*3.14159265/180)
+        $if !$g_hash->{cm}
+            $g_hash->{cm}=[1, $ta, $tb, 1, 0, 0]
+        $else
+            my $cm = $g_hash->{cm}
+            my $a0=$cm->[0]+$cm->[1]*$tb
+            my $a1=$cm->[0]*$ta+$cm->[1]
+            my $a2=$cm->[2]+$cm->[3]*$tb
+            my $a3=$cm->[2]*$ta+$cm->[3]
+            $(for:i in 0,1,2,3)
+                $cm->[$(i)]=$a$(i)
+        $cm_changed=1
+
