@@ -64,7 +64,6 @@ subcode: plot
     my $dir=0
     MyPlot::moveto($x,$y)
     &call each_char, $str
-        # $print -- c=$c
         $if $c eq 'A' or $c eq 'B'
             $call get_pos
             MyPlot::lineto($x,$y)
