@@ -1,5 +1,5 @@
 page: test, basic_frame, t.pdf
-    $call fig_6
+    $call fig_1
 
 subcode: fig_1
     #-- 9 trees
