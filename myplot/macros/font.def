@@ -45,8 +45,16 @@ subcode: _autoload
     $config{label_font}="Helvetica"
 
 fncode: set_font($ft, $size)
-    $global $last_font
+    $global $last_font, $last_font_size
     my $t="$ft->{Name} $size"
     $if $last_font ne $t
         $last_font=$t
         push @$page_content, "/$t Tf"
+
+
+fncode: text_at($x, $y, $s)
+    push @$page_content, "BT"
+    push @$page_content, "$x $y Td"
+    push @$page_content, "($s) Tj"
+    push @$page_content, "ET"
+

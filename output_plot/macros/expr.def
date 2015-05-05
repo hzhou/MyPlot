@@ -1,3 +1,4 @@
+include: perl/parse.def
 macros:
     type: $1->[1]
     atom: $1->[0]
@@ -6,32 +7,20 @@ macros:
 fncode: parse_expr($l, $macros1, $macros2)
     $if !$l
         return
-    $if $debug
-        $print "parse_expr [$l]"
-    $(if:0)
-        $foreach %$macros1
-            $print "  macros1 $k: $v"
-        $foreach %$macros2
-            $print "  macros1 $k: $v"
-    my @stack
-    $call @init
-    $l.=';'
-    &call parse_loop, $l
-        $call @match
-        # print_token($cur)
-        $call @process
-        push @stack, $cur
-    $if @stack!=1
-        my $n=@stack
-        $print "---- dump stack [$n] ----\n"
-        $foreach $t in @stack
-            print_token($t)
-        die "Unreduced expresion [$l].\n"
-    $if $debug
-        print_token($stack[0], "    ret: ")
-    return $stack[0]
+    
+    $call @debug_init
+    $call parse_frame, strict
 
     # ------------
+    subcode: debug_init
+        $if $debug
+            $print "parse_expr [$l]"
+        $(if:0)
+            $foreach %$macros1
+                $print "  macros1 $k: $v"
+            $foreach %$macros2
+                $print "  macros1 $k: $v"
+
     subcode:: init
         my %prec=(
                 'eof'=>0,
@@ -44,14 +33,15 @@ fncode: parse_expr($l, $macros1, $macros2)
                 "num"=>4,
                 "list"=>4,
                 "var"=>4,
-                '('=>-1, '['=>-1, ')'=>0, ']'=>0, 't('=>4, 't['=>4,
+                '('=>-1, '['=>-1, ')'=>0, ']'=>0, 
+                't('=>4, 't['=>4,
                 );
         my %func=();
 
     subcode: match
-        my $cur
-        $if $l=~/\G(\s+)/gc
-            next
+        $call skip, \s+
+        $call symbol, [\+\-\*\/,]
+        $call bracket
         $elif $l=~/\G(\d+)\/(\d+)/gc
             $cur = [$1/$2, "num"]
         $elif $l=~/\G(\d+(\.\d+)?)/gc
@@ -63,16 +53,6 @@ fncode: parse_expr($l, $macros1, $macros2)
             $cur = [$macros2->{$1} / $2, "num"]
         $elif $l=~/\G(\w+)/gc
             $call @parse_word
-        $elif $l=~/\G([\+\-\*\/,])/gc
-            $cur = [$1, $1]
-        $elif $l=~/\G([\(\[])/gc
-            $cur = [$1, "t$1"]
-        $elif $l=~/\G([\)\]])/gc
-            $cur = [$1, "$1"]
-        $elif $l=~/\G;/gc
-            $cur = [undef, "eof"]
-        $else
-            die "parse error: [$l] ".pos($l)."\n"
 
         # ---
         subcode: parse_word
@@ -95,11 +75,6 @@ fncode: parse_expr($l, $macros1, $macros2)
                     $cur = make_var($pre.$xyz.$tail, $macros2)
 
     # ------------------------------------------
-    macros:
-        type: $stack[$1]->[1]
-        atom: $stack[$1]->[0]
-        cur_type: $cur->[1]
-
     subcode:: init
         my @bracket_stack
         my %match=('['=>']', '('=>')')
@@ -108,9 +83,7 @@ fncode: parse_expr($l, $macros1, $macros2)
         process:
         $call check_precedence
 
-        $if $(cur_type) eq "eof"
-            break
-        $elif $(cur_type) eq 't[' or $(cur_type) eq 't('
+        $if $(cur_type) eq 't[' or $(cur_type) eq 't('
             $(cur_type)=substr($(cur_type), 1, 1)
             push @bracket_stack, $match{$(cur_type)}
         $elif $(cur_type) eq ']' or $(cur_type) eq ')'
@@ -188,28 +161,6 @@ fncode: reduce_stack($stack)
     push @$stack, $cur
 
 #---------------------------------------- 
-subcode: debug_stack
-    $print "debug_stack:\n"
-    $foreach $t in @$stack
-        print_token($t)
-
-fncode: print_token($t, $pre, $post)
-    $if defined $pre
-        print $pre
-    $if $t->[1] eq "var"
-        print "  ( "
-        $foreach $t2 in @{$t->[0]}
-            print $t2->[1]
-            print $t2->[0]
-            print "  "
-        print ", var )"
-    $else
-        print "  ( $t->[0], $t->[1] )"
-    $if defined $post
-        print $post
-    $else
-        print "\n"
-
 fncode: get_var_string($v)
     my %t
     $foreach $t in @{$v->[0]}

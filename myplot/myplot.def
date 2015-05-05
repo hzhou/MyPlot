@@ -3,6 +3,7 @@ include: macros/graphics.def
 include: macros/font.def
 include: macros/text.def
 include: macros/hobby_curve.def
+include: macros/arrow.def
 include: macros/label.def
 
 page: MyPlot

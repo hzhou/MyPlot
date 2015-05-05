@@ -34,7 +34,7 @@ fncode: arcto($x1,$y1,$x2,$y2,$t1,$t2)
     my $y0=$y1-$s1*$r
     my $xm=$x0+$r*cos($tm*$(to_rad))
     my $ym=$y0+$r*sin($tm*$(to_rad))
-    $if $t2-$t1>90
+    $if abs($t2-$t1)>90
         my $tm=($t1+$t2)/2
         arcto($x1,$y1,$xm,$ym,$t1,$tm)
         arcto($xm,$ym,$x2,$y2,$tm,$t2)
@@ -119,8 +119,9 @@ fncode: save_state
 fncode: restore_state
     push @$page_content, "Q"
 
-fncode: set_matrix($a1, $a2, $a3, $a4, $tx, $ty)
-    push @$page_content, "$a1 $a2 $a3 $a4 $tx $ty cm"
+fncode: set_matrix
+    my $fmt="%.2f " x 6
+    push @$page_content, sprintf("$fmt cm", @_)
 
 fncode: stroke
     push @$page_content, "S"

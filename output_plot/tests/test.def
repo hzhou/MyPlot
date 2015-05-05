@@ -1,5 +1,5 @@
 page: test, basic_frame, t.pdf
-    $call fig_1
+    $call fig_3
 
 subcode: fig_1
     #-- 9 trees
@@ -29,14 +29,14 @@ subcode: fig_3
         z4=(30,50)
 
     $group origin (100, 200)
-        $draw z0..z1..z2..z3..z4
+        $drawarrow z0..z1..z2..z3..z4
     $group origin (200, 200)
-        $draw z0..z1..z2..z3..z4..cycle
+        $drawarrow z0..z1..z2..z3..z4..cycle
     $group origin (300, 200)
         $draw z0..z1..z2..z3--z4--cycle
 
     $group origin (100, 350)
-        $draw z0..z1{up}..z2{left}..z3..z4
+        $drawdblarrow z0..z1{up}..z2{left}..z3..z4
 
 subcode: fig_4
     $group origin(100, 100)
@@ -73,7 +73,7 @@ subcode: fig_6
         z3=1/2[z0,z1]
         z4=1/2[z0,z2]
 
-    $group origin(300, 300), a=100
+    $group origin(300, 300), a=100, rotate 90
         $draw $(circle:a)
         $fill z1..arc(-180,0)..z0..arc(180,0)..z2..arc(0,-180)..z1
         $group origin(z3)

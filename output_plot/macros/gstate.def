@@ -65,7 +65,7 @@ fncode: parse_graphic_state($param)
             $g_hash->{macro}->{$1}=$2
 
     $if $cm_changed
-        my $t=join(', ', @{$g_hash->{cm}})
+        my $t=join(", ",  @{$g_hash->{cm}})
         $call Plot, set_matrix($t)
 
     # ----------------------

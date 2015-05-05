@@ -45,15 +45,19 @@ subcode:: on_callback
 
 #----- draw ----------------------------------- 
 subcode:: parse_func
-    $case $func eq "draw"
+    $case $func =~ /^draw/
         check_default("draw")
-        my $info={type=>"draw"}
+        my $info={type=>$func}
         parse_path($param, $info)
         $call Plot, stroke()
+        $if $info->{arrow_0_param}
+            $call Plot, arrow($info->{arrow_0_param}, $g_hash->{linewidth}+4)
+        $if $info->{arrow_1_param}
+            $call Plot, arrow($info->{arrow_1_param}, $g_hash->{linewidth}+4)
         return 0
     $case $func eq "fill"
         check_default("fill")
-        my $info={type=>"fill"}
+        my $info={type=>$func}
         parse_path($param, $info)
         $call Plot, fill()
         return 0
