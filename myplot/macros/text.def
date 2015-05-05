@@ -51,26 +51,55 @@ fncode: encode_utf($t)
         
 #---------------------------------------- 
 include: perl/parse.def
-fncode: parse_tex($str)
-    my @stack
-    my ($cur_stage, $cur_list)
-    $cur_stage="text"
-    $cur_list=[]
-    &call parse_loop, $str
-        $if_lex \{
-            push @stack, [$cur_stage, $cur_list]
-            $cur_list=[]
-        $if_lex \}
-            my $t=pop @stack
-            push @{$t->[1]}, $cur_list
-            ($cur_stage, $cur_list)=@$t
-        $if_lex ([_\^])
-            push @$cur_list, $1
-        $if_lex (\\[a-zA-Z]+)
-            push @$cur_list, $1
-        $if_lex (\\[^a-zA-Z])
-            push @$cur_list, $1
+fncode: parse_tex($l)
+    $call parse_frame
 
+    subcode: match
+        $call symbol, [_\^]
+        $call brace
+        $call token, control, \\[a-zA-Z]+
+        $call token, control, \\[^a-zA-Z]
+        $call token, word, [a-zA-Z]+
 
+    subcode:: init
+        my @hold_stack
+        my $cur_hold=0
+        my %hold_hash=('^'=>1, '_'=>1)
+    subcode: process
+        $if $hold_hash{$(cur_type)}
+            push @hold_stack, $cur_hold
+            $cur_hold=$hold_stack{$(cur_type)}
+        $elif $cur_hold>0
+            $if $(type:-1) eq '^' or $(type:-1) eq '_'
+                $call @attach_script
+            $cur_hold--
+            $if $cur_hold==0
+                $cur_hold=pop @hold_stack
+                goto process
+        $elif $(type:-1) eq "list"
+            push @{$(atom:-1)}, $cur
+            next
 
+        subcode: attach_script
+            my $c=$(type:-1)
+            pop @stack
+            $call @check_atom
+            my $t = pop @stack
+            $if $t->[1] eq "script"
+                $(set:cell=$t->[0]->{$c})
+                $if $(cell)
+                    $if ref($(cell)) eq "ARRAY"
+                        push @{$(cell)}, $cur
+                    $else
+                        $(cell)=[$(cell), $cur]
+                $else
+                    $(cell)=$cur
+            $else
+                $t->[0]={"main"=>$t, $c=>$cur}
+                $t->[1]="script"
+            $cur = $t
+            goto process
 
+        subcode: check_atom
+            $if @stack<1
+                push @stack, ["", "word"]

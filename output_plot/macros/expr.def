@@ -80,7 +80,6 @@ fncode: parse_expr($l, $macros1, $macros2)
         my %match=('['=>']', '('=>')')
 
     subcode: process
-        process:
         $call check_precedence
 
         $if $(cur_type) eq 't[' or $(cur_type) eq 't('
