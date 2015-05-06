@@ -1,0 +1,20 @@
+fncode: arrow($x, $y, $dir, $l)
+    my $a = $(pi)/4
+    my $x0 = $x + cos($dir-$a)*$l
+    my $y0 = $y + sin($dir-$a)*$l
+    my $x1 = $x + cos($dir+$a)*$l
+    my $y1 = $y + sin($dir+$a)*$l
+    moveto($x,$y)
+    lineto($x0, $y0)
+    $(if:0)
+        lineto($x1, $y1)
+    $(else)
+        my $a = $(pi)/8
+        $l/=2
+        my $cx0 = $x + cos($dir-$a)*$l
+        my $cy0 = $y + sin($dir-$a)*$l
+        my $cx1 = $x + cos($dir+$a)*$l
+        my $cy1 = $y + sin($dir+$a)*$l
+        curveto($cx0, $cy0, $cx1, $cy1, $x1, $y1)
+    close_path()
+    push @$page_content, "B"

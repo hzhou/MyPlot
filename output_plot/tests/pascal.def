@@ -1,0 +1,57 @@
+page: test, basic_frame, t.pdf
+    my $t = [1]
+
+    my $cx=300
+
+    my $step_x=1.5
+    my $step_y=2.5
+
+    $(set:M=3)
+
+    my $y0=790
+    $for $i=0:200
+        # print "$i: ", join(',', @$t), "\n"
+        my $x0=$cx-$step_x*$i
+        $for $j=0:$i+1
+            $call set_diamond
+            $call color_rules
+            $fill z0--z1--z3--z2--cycle
+            $x0+=$step_x*2
+        $y0-=$step_y
+
+        $call pascal_next
+
+    subcode: pascal_next
+        my @t2
+        push @t2, $t->[0]
+        $for $j=0:$i
+            push @t2, ($t->[$j]+$t->[$j+1])%$(M)
+        push @t2, $t->[-1]
+        $t=\@t2
+
+    subcode: color_rules
+        $if $t->[$j] %$(M) ==0
+            $line fill green
+        $elif $t->[$j] %$(M) ==1
+            $line fill black
+        $elif $t->[$j] %$(M) ==2
+            $line fill orange
+        $elif $t->[$j] %$(M) ==3
+            $line fill magenta
+        $elif $t->[$j] %$(M) ==4
+            $line fill cyan
+        $elif $t->[$j] %$(M) ==5
+            $line fill red
+        $else
+            $line fill blue
+
+    subcode: set_diamond
+        my $x1 = $x0-$step_x
+        my $x2 = $x0+$step_x
+        my $x3 = $x0
+        my $y1 = $y0-$step_y
+        my $y2 = $y0-$step_y
+        my $y3 = $y1-$step_y
+
+
+

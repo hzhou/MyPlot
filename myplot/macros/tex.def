@@ -1,0 +1,92 @@
+
+#---------------------------------------- 
+include: perl/parse.def
+fncode: parse_tex($l)
+    my $mode="text"
+    $call parse_frame, strict
+
+    subcode: match
+        $call symbol, [_^&]
+        $call brace
+        &call if_lex, \\([\\_^&{}])
+            $cur = [$1, "word"]
+        &call if_lex, \\([^a-zA-Z]|[a-zA-Z]\w*)
+            $cur = [$1, "control"]
+            &call if_lex, \s
+                # skip 1 space after control
+        $call token, word, [a-zA-Z]\w*
+        $call token, word, \d+
+        $call token, space, \s+
+
+    subcode:: init
+        my @hold_stack
+        my $cur_hold=0
+        my %hold_hash=(
+            '^'=>1, '_'=>1,
+            it=>1,
+            );
+
+        my @group_stack
+
+    subcode: process
+        # $print process cur type: $(cur_type)
+        $if $(cur_type) eq "t{"
+            $call push_group
+        $elif $(cur_type) eq "}"
+            $call pop_group
+        $elif $(cur_type) eq "eof"
+            my @t=@stack
+            @stack=([\@t, "list"])
+        $elif $hold_hash{$(cur_type)}
+            $call new_hold, $hold_hash{$(cur_type)}
+        $elif $(cur_type) eq "control" and $hold_hash{$(cur_atom)}
+            $call new_hold, $hold_hash{$(cur_atom)}
+        $elif $cur_hold>0
+            $if $(cur_type) eq "space"
+                next
+            $else
+                $call push_hold
+
+        # ---- group -------
+        subcode: push_group
+            my $n=@stack
+            push @group_stack, $n
+            push @hold_stack, $cur_hold
+            $cur_hold=0
+            next
+
+        subcode: pop_group
+            $cur_hold=pop @hold_stack
+            my $n=pop @group_stack
+            my @t=splice @stack, $n
+            $if @t==0
+                $cur=[undef, "noop"]
+            $elif @t==1
+                $cur=$t[0]
+            $else
+                $cur=[\@t, "list"]
+            goto process
+
+        # ---- hold is for function---------
+        subcode: new_hold(hold)
+            push @hold_stack, $cur_hold
+            $cur_hold=$(hold)
+            # prepend '/' to avoid hold_hash
+            $(cur_type)='/'.$(cur_atom)
+            $(cur_atom)=[]
+
+        subcode: push_hold
+            push @{$(atom:-1)}, $cur
+            $cur_hold--
+            $if $cur_hold==0
+                $cur_hold=pop @hold_stack
+                $cur = pop @stack
+                goto process
+            $else
+                next
+
+    subcode: post
+        print_token($stack[-1])
+
+#---------------------------------------- 
+fncode: format_tex($t)

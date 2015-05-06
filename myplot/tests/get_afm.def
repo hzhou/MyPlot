@@ -1,7 +1,7 @@
 page: get_afm
     subcode: main
 	my @files=glob("fonts/*.afm")
-	&call open_w, macros_pdf/standard_fonts.def
+	&call open_w, macros/standard_fonts.def
 	    print Out "subcode: init_standard_font_metrics\n"
 	    $foreach $f in @files
 		$call get_font
@@ -14,7 +14,9 @@ subcode: get_font
 	$name=$1
 	my $flag
 	&call open_r, $f
-	    $if /^IsFixedPitch true/
+            $if /^FontName (\S+)/
+                $name=$1
+	    $elif /^IsFixedPitch true/
 		$fixed=1
 	    $elif /StartCharMetrics (\d+)/
 		$count=$1
