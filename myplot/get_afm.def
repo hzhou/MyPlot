@@ -1,0 +1,74 @@
+page: get_afm
+    output_dir: .
+
+    my @files=glob("fonts/*.afm")
+    &call open_w, macros/standard_fonts.def
+        print Out "subcode: init_standard_font_metrics\n"
+        $foreach $f in @files
+            $call get_font
+
+subcode: get_font
+    my $fixed=0
+    my $start=32
+    $if $f=~/fonts\/(.*)\.afm/
+        my ($name, $count)
+        my (@widths, @tops, @bottoms)
+        my %glyf_name
+        my (@lig, @kern)
+	$name=$1
+	my $flag
+	&call open_r, $f
+            $if /^FontName (\S+)/
+                $name=$1
+	    $elif /^IsFixedPitch true/
+		$fixed=1
+	    $elif /^StartCharMetrics (\d+)/
+		$count=$1
+		$flag="metrics"
+	    $elif /^EndCharMetrics/
+		$flag=0
+	    $elif /^C\s*(\S+)\s*(.*)/ and $flag
+                my $l=$2
+                my ($w, $t, $b, $char_name)
+                $if $l=~/; WX\s+(\d+)/
+                    $w=$1
+                $if $l=~/; B\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/
+                    ($t, $b)=($4, $2)
+                push @widths, $w
+                push @tops, $t
+                push @bottoms, $b
+                $if $l=~/; N\s*(\w+)/
+                    $char_name=$1
+                    $glyf_name{$char_name}=$#widths
+                $while $l=~/\bL\s+(\w+)\s+(\w+)/g
+                    push @lig, "$char_name-$1-$2"
+            $elif /^KPX (.*)/
+                push @kern, $1
+
+        my (@lig_list, @kern_list)
+        $foreach $t in @lig
+            my @t=split /-/, $t
+            my $k=$glyf_name{$t[0]}.'-'.$glyf_name{$t[1]}
+            push @lig_list, "\"$k\"=>\"".$glyf_name{$t[2]}."\""
+        $foreach $t in @kern
+            my @t=split /\s+/, $t
+            my $k=$glyf_name{$t[0]}.'-'.$glyf_name{$t[1]}
+            push @kern_list, "\"$k\"=>$t[2]"
+
+	print Out "    \$font_metrics{\"$name\"}="
+	$if $fixed
+	    print Out "{isfixed=>1, width=>$widths[0], start=>$start, count=>$count}\n"
+	$else
+	    print Out "{isfixed=>0, start=>$start, count=>$count,\n"
+            print Out "    metrics=>[". join(", ", @widths). "],\n"
+            print Out "    tops=>[". join(", ", @tops). "],\n"
+            print Out "    bottoms=>[". join(", ", @bottoms). "],\n"
+            $if @lig_list
+                print Out "    ligs=>{".join(", ", @lig_list)."},\n"
+            $if @kern_list
+                print Out "    kern=>{".join(", ", @kern_list)."},\n"
+	    print Out "    }\n"
+
+    
+
+
