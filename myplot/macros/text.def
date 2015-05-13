@@ -1,11 +1,4 @@
 #---------------------------------------- 
-include: macros/standard_fonts.def
-include: macros/font_ttf.def
-
-subcode: _autoload
-    $global %font_metrics
-    $call init_standard_font_metrics
-
 fncode: text_width($str, $font, $font_size)
     #--- parse into code list ------
     my @codelist
@@ -21,31 +14,73 @@ fncode: text_width($str, $font, $font_size)
                 $else
                     push @codelist, ord($1)
     # --- add up the widths ----
+    my $scale=$font_size/$font->{em}
     $if $font->{isfixed}
-        return $font->{width}*scalar(@codelist)*$font_size/1000
+        return $font->{width}*scalar(@codelist)*$scale
     $else
-        my $metrics=$font->{metrics}
-        my $start=$font->{start}
-        my $count=$font->{count}
+        my $widths = $font->{widths}
         my $sum=0
         $foreach $c in @codelist
-            $c-=$start
-            $if $c<0 or $c>=$count
-                $sum+=$metrics->[0]
+            my $cid=get_cid($font, $c)
+            $if $cid>0
+                $sum+=$widths->[$cid]
             $else
-                $sum+=$metrics->[$c]
-        return $sum*$font_size/1000
+                $sum+=$widths->[0]
+        return $sum*$scale
 
-fncode: encode_utf($t)
-    my @t
-    $for $i=0:length($t)
-        my $c=ord(substr($t, $i, 1))
-        printf "$i: [%x]\n", $c
-        $if $c<=0xffff
-            push @t, sprintf("%04X", $c)
+fncode: tex_size($c, $font, $font_size)
+    my $cid=get_cid($font, $c)
+    my $scale = $font_size/$font->{em}
+    my $w=$font->{widths}->[$cid]*$scale
+    my $t=$font->{tops}->[$cid]*$scale
+    my $b=$font->{bottoms}->[$cid]*$scale
+    return ($w, $t, $b)
+
+#---------------------------------------- 
+fncode: format_word($str, $font, $font_size)
+    my $box = {type=>"word", font=>$font, size=>$font_size}
+    my $skew=$font->{skew}
+    $if !$font
+        die "format_word: missing font\n"
+    $elif $font->{slanted}
+        $font=$font->{base}
+    my $len = length($str)
+    $(for:w in widths, tops, bottoms)
+        my $$(w) = $font->{$(w)}
+    my $scale = $font_size/$font->{em}
+
+    my ($width, $top, $bottom)=(0,0,0)
+    $for $i=0:$len
+        my $c = substr($str, $i, 1)
+        my $cid = get_cid($font, $c)
+        $if $cid>0
+            $call add, width
+            $call max, top
+            $call min, bottom
+            $if $i==$len-1 and $skew
+                $box->{italic_adjust} = $tops->[$cid]*$scale*$skew
         $else
-            $c-=0x10000
-            push @t, sprintf("%04X", 0xD800+$c>>10)
-            push @t, sprintf("%04X", 0xDC00+$c&0x3F)
-    return join('', @t)
-        
+            # empty
+
+    $box->{text}=$str
+    $box->{width}=$width * $scale
+    $box->{top}=$top * $scale
+    $box->{bottom}=$bottom * $scale
+
+    # $call debug_box
+    return $box
+
+    # ----------------------
+    subcode: add(var)
+        $$(var) += $$(var)s->[$cid]
+    subcode: max(var)
+        $if $$(var) < $$(var)s->[$cid]
+            $$(var) = $$(var)s->[$cid]
+    subcode: min(var)
+        $if $$(var) > $$(var)s->[$cid]
+            $$(var) = $$(var)s->[$cid]
+
+    # ---------------
+    subcode: debug_box
+        $print $box: $box->{width} - $box->{top} - $box->{bottom}
+

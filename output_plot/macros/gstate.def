@@ -97,6 +97,10 @@ fncode: parse_graphic_state($param)
             $cm->[5]+=$cm->[2]*$(x)+$cm->[3]*$(y)
         $cm_changed=1
 
+    # ------------------------
+    # [x'] = [a, c, e] [x]
+    # [y'] = [b, d, f] [y]
+    # [z'] = [0, 0, 1] [z]
     subcode: cm_rotate(t)
         my $th=$(t)*3.14159265/180
         my $C=cos($th)

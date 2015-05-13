@@ -9,10 +9,10 @@ fncode: fill_rgb($r, $g, $b)
 
 #---- path  ------------------------------------ 
 fncode: moveto($x, $y)
-    push @$page_content, "$x $y m"
+    push @$page_content, sprintf("%.2f %.2f m", $x, $y)
 
 fncode: lineto($x, $y)
-    push @$page_content, "$x $y l"
+    push @$page_content, sprintf("%.2f %.2f l", $x, $y)
 
 fncode: curveto($x1, $y1, $x2, $y2, $x3, $y3)
     push @$page_content, sprintf("%.2f %.2f %.2f %.2f %.2f %.2f c", $x1, $y1, $x2, $y2, $x3, $y3)
@@ -119,6 +119,15 @@ fncode: save_state
 fncode: restore_state
     push @$page_content, "Q"
 
+#-------------------------
+#- as in pdf spec:
+#-  [x', y', 1] = [x, y, 1] [a b 0]
+#-                          [c d 0]
+#-                          [e f 1]
+#- or equivalently
+#-  [x'  = [a c e  [x 
+#-   y'  =  b d f   y 
+#-   z'] =  0 0 1]  z]
 fncode: set_matrix
     my $fmt="%.2f " x 6
     push @$page_content, sprintf("$fmt cm", @_)
@@ -138,3 +147,6 @@ fncode: clip
 fncode: clipstroke
     push @$page_content, "W S"
 
+#---------------------------------------- 
+fncode: rect($x, $y, $w, $h)
+    push @$page_content, "$x $y $w $h re"

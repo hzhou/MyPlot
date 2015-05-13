@@ -52,9 +52,9 @@ subcode: get_h_opt(v, default)
         $$(v)=$(default)
 
 subcode: get_label_font
-    my $ft=find_font($config{label_font})
     $call get_h_opt, font_size, 12
-    set_font($ft, $font_size)
+    my $ft=find_font($config{label_font})
+    set_font($config{label_font}, $font_size)
 
 subcode: with_label_string
     $if defined $h->{label}

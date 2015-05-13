@@ -62,6 +62,49 @@ subcode:: parse_func
         $call Plot, fill()
         return 0
 
+#---- TeX -------------------------------------
+subcode:: parse_func
+    $case $func eq "tex"
+        return "CALLBACK tex $param"
+
+subcode:: on_callback
+    $case $func eq "tex"
+        $call parse_param
+        $call call_tex
+
+    # ---------------
+    subcode: parse_param
+        my @tlist=MyDef::utils::proper_split /,\s*/, $param
+        my $pt_size=12
+        my $mode="text"
+        $foreach $t in @tlist
+            $if $t=~/^(\d+)(pt)?$/
+                $pt_size=$1
+            $elif $t=~/^(math)$/
+                $call Plot, set_tex_mode('math')
+        $call Plot, init_tex_font($pt_size)
+
+    # ---------------
+    subcode: call_tex
+        $while $codelist->[-1]=~/^\s*$/
+            pop @$codelist
+        $while $codelist->[0]=~/^SOURCE/
+            shift @$codelist
+
+        $if @$codelist==1
+            my $t=$codelist->[0]
+            $t=~s/\\/\\\\/g
+            $t=~s/'/\\'/g
+            $call Plot, tex('$t')
+        $else
+            $call Plot, tex <<'HERE'
+            push @$out, "PUSHDENT"
+            $foreach $t in @$codelist
+                $if $t!~/^SOURCE/
+                    push @$out, $t
+            push @$out, "HERE"
+            push @$out, "POPDENT"
+
 #---- label ------------------------------------ 
 subcode:: parse_func
     $case $func eq "label"

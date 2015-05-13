@@ -1,32 +1,77 @@
+include: macros/tex_global.def
+include: macros/tex_dimension.def
 
-#---------------------------------------- 
+include: macros/tex_format.def
+include: macros/tex_script.def
+include: macros/tex_control.def
+
+include: macros/tex_display.def
+
+fncode: tex($l)
+    my $ast = parse_tex($l, $tex{mode})
+    my $box= format_tex($ast)
+    tex_display($box)
+
 include: perl/parse.def
-fncode: parse_tex($l)
-    my $mode="text"
+#---------------------------------------- 
+#- types: word, control, list, space, noop
+#-        [ [list], atom ]
+
+fncode: parse_tex($l, $mode)
+    $if !$mode
+        # $mode = "text"
+        $mode = "math"
     $call parse_frame, strict
 
+    subcode: post
+        print_token($stack[-1])
+
     subcode: match
-        $call symbol, [_^&]
         $call brace
         &call if_lex, \\([\\_^&{}])
-            $cur = [$1, "word"]
-        &call if_lex, \\([^a-zA-Z]|[a-zA-Z]\w*)
+            $cur = [$1, "nonword"]
+        &call if_lex, \\([^a-zA-Z]|[a-zA-Z0-9]+)
             $cur = [$1, "control"]
-            &call if_lex, \s
-                # skip 1 space after control
-        $call token, word, [a-zA-Z]\w*
-        $call token, word, \d+
-        $call token, space, \s+
+            $call @skip_1_space
+            $call @check_grab
+        $elif $mode eq "text"
+            $call token, space, \s+
+            &call if_lex, \$(.*?)\$
+                $cur = parse_tex($1, "math")
+            $else
+                $mode="error"
+        $elif $mode
+            #-- math mode ----
+            $call symbol, [_^&]
+            $call token, number, [0-9.]+
+            $call token, word, [a-zA-Z0-9]+
+            $call token, nonword, [\+\-\*()\[\]!?,:;<=>\/]
+            # $call token, linebreak, \n
+            $call skip, \s+
+            $else
+                $mode="error"
 
+    # ------------------------
+    subcode: skip_1_space
+        # $print control $1
+        &call if_lex, \s
+            # skip 1 space after control
+
+    subcode: check_grab
+        $if $1=~/^(text|eq|equation)$/
+            $call grab_brace
+            $cur = parse_tex($t, $1)
+
+    # ------------------------
     subcode:: init
         my @hold_stack
         my $cur_hold=0
-        my %hold_hash=(
-            '^'=>1, '_'=>1,
-            it=>1,
-            );
 
         my @group_stack
+
+    subcode: process_eof
+        my @t=@stack
+        @stack=([\@t, $mode])
 
     subcode: process
         # $print process cur type: $(cur_type)
@@ -34,9 +79,6 @@ fncode: parse_tex($l)
             $call push_group
         $elif $(cur_type) eq "}"
             $call pop_group
-        $elif $(cur_type) eq "eof"
-            my @t=@stack
-            @stack=([\@t, "list"])
         $elif $hold_hash{$(cur_type)}
             $call new_hold, $hold_hash{$(cur_type)}
         $elif $(cur_type) eq "control" and $hold_hash{$(cur_atom)}
@@ -85,8 +127,3 @@ fncode: parse_tex($l)
             $else
                 next
 
-    subcode: post
-        print_token($stack[-1])
-
-#---------------------------------------- 
-fncode: format_tex($t)

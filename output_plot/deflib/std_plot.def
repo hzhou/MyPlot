@@ -30,12 +30,11 @@ subcode: newpage
 subcode: open_pdf(f)
     $(if:f~")
 	$(set:f=$(f:strip))
-    &call block
-	$(PLOT)::init()
-	$call newpage
-	BLOCK
-	$(PLOT)::write_pdf("$(f)")
-	print " --> $(f)\n"
+    $(PLOT)::init()
+    $call newpage
+    BLOCK
+    $(PLOT)::write_pdf("$(f)")
+    print " --> $(f)\n"
 
 #---------------------------------------- 
 subcode: rect(x, y, w, h)
@@ -53,15 +52,12 @@ subcode: circle(x0, y0, r)
     $call draw
 
 #---- Text ------------------------------------ 
-subcode: setfont(name, size)
+subcode: set_font(name, size)
     $global $cur_font, $cur_font_size
     $(if:name~")
-	$cur_font=$(PLOT)::find_font($(name))
-    $(else)
-	$cur_font=$(PLOT)::find_font("$(name)")
-    $cur_font_size=$(size)
-    my $name=$cur_font->{Name}
-    push @$page_content, "/$name $cur_font_size Tf"
+        $(set:name=$(name:strip))
+    my $ft = $(PLOT)::find_font("$(name)")
+    $(PLOT)::set_font($ft, $(size))
 
 subcode: setcharspacing(tc)
     push @$page_content, "$(tc) Tc"

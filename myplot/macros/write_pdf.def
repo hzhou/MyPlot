@@ -25,7 +25,8 @@ subcode: process_pdf
 	$call process_page
 
     $foreach $font in @font_list
-	$call process_font
+        $if $font->{used}
+            $call process_font
 
     $foreach $xobj in @xobj_list
 	$call process_xobj
@@ -95,18 +96,25 @@ subcode: process_font
 	$font->{Subtype}="Type0"
 	$font->{Encoding}="UniGB-UTF16-H"
 	$call process_font_chinese
+    $elif $font->{ttf} and $font->{cid}
+        $font->{Subtype}="Type0"
+	$font->{Encoding}="/identity-H"
+        $call process_cid_ttf
+        $call embed_ttf
     $elif $font->{ttf}
 	$font->{Subtype}="TrueType"
-	$font->{Encoding}="StandardEncoding"
-	$font->{FirstChar}=$font->{start}
-	$font->{LastChar}=$font->{start}+$font->{count}-1
+	# $font->{Encoding}="StandardEncoding"
+	# $font->{FirstChar}=$font->{start}
+	# $font->{LastChar}=$font->{start}+$font->{count}-1
 	my $widths=$font->{metrics}
-	my $t=join(' ', @$widths)
-	$font->{Widths}="[ $t ]"
+        $if $widths
+            my $t=join(' ', @$widths)
+            $font->{Widths}="[ $t ]"
 	$call process_font_ttf
+        $call embed_ttf
     $else
 	$font->{Subtype}="Type1"
-	$font->{Encoding}="StandardEncoding"
+	# $font->{Encoding}="StandardEncoding"
 
     # ------------------------------
     subcode: process_font_chinese
@@ -114,7 +122,7 @@ subcode: process_font
         $idx++
         $font->{DescendantFonts}="[ $idx 0 R ]"
         push @{$font->{keylist}}, "DescendantFonts"
-        my $font_cid={Type=>"Font", Subtype=>"CIDFontType0", DW=>1000, BaseFont=>$font->{BaseFont}}
+        my $font_cid={Type=>"Font", Subtype=>"CIDFontType0", BaseFont=>$font->{BaseFont}}
         $font_cid->{DW}=1000
         $font_cid->{W}="[ 1 95 500 814 907 500 7712 7716 500 ]"
         $font_cid->{keylist}=["Type", "Subtype", "DW", "BaseFont", "DW2", "W", "FontDescriptor", "CIDSystemInfo"]
@@ -140,6 +148,34 @@ subcode: process_font
         $font_descriptor->{index}=$idx
 
     # ------------------------
+    subcode: process_cid_ttf
+        #---- DescendantFonts ----
+        $idx++
+        $font->{DescendantFonts}="[ $idx 0 R ]"
+        push @{$font->{keylist}}, "DescendantFonts"
+        my $font_cid={Type=>"Font", Subtype=>"CIDFontType2", BaseFont=>$font->{BaseFont}}
+        my $widths=$font->{metrics}
+        $font_cid->{DW}=$widths->[-1]
+        $font_cid->{W}="[ 0 [".join(' ', @$widths)."] ]"
+        $font_cid->{CIDToGIDMap}="/Identity"
+        $font_cid->{keylist}=["Type", "Subtype", "DW", "BaseFont", "DW2", "W", "FontDescriptor", "CIDSystemInfo", "CIDToGIDMap"]
+        push @obj_list, $font_cid
+        $font_cid->{index}=$idx
+
+        $font_cid->{CIDSystemInfo}="<< /Registry (Adobe) /Ordering (UCS) /Supplement 0 >>"
+        #---- FontDescriptor: used for font substitution ------
+        $idx++
+        $font_cid->{FontDescriptor}="$idx 0 R"
+        my $font_descriptor={Type=>"FontDescriptor", FontName=>$font->{BaseFont}}
+        $(for:v in Ascent, Descent, FontBBox)
+            $font_descriptor->{$(v)}=$font->{$(v)}
+        $font_descriptor->{MissingWidth}=500
+        $font_descriptor->{Flags}=4 
+
+        $font_descriptor->{keylist}=["Type", "FontName", "Ascent", "Descent", "CapHeight", "XHeight", "MissingWidth", "Flags", "FontBBox", "ItalicAngle", "StemV"]
+        push @obj_list, $font_descriptor
+        $font_descriptor->{index}=$idx
+    # ------------------------
     subcode: process_font_ttf
         #---- FontDescriptor: used for font substitution ------
         $idx++
@@ -150,7 +186,7 @@ subcode: process_font
         $font_descriptor->{Descent}=$font->{descent}
         $font_descriptor->{CapHeight}=$font->{capheight}
         $font_descriptor->{XHeight}=$font->{xheight}
-        $font_descriptor->{Flags}=32
+        $font_descriptor->{Flags}=4 # symbolic 
         $font_descriptor->{FontBBox}="[ $font->{xmin} $font->{ymin} $font->{xmax} $font->{ymax} ]" 
         $font_descriptor->{ItalicAngle}=0 
         $font_descriptor->{StemV}=0
@@ -159,16 +195,18 @@ subcode: process_font
         push @obj_list, $font_descriptor
         $font_descriptor->{index}=$idx
 
+    subcode: embed_ttf
         #---- Embed fontfile ---------
-        $idx++
-        my $r_font=$font->{ttf}
-        my $len=length($$r_font)
-        my $fontfile={Length1=>$len, Length2=>0, Length3=>0, data=>$r_font}
-        $fontfile->{keylist}=["Length", "Length1", "Length2", "Length3"]
-        push @obj_list, $fontfile
-        $fontfile->{index}=$idx
-        $font_descriptor->{FontFile2}="$idx 0 R"
-        push @{$font_descriptor->{keylist}}, "FontFile2"
+        $if $font->{ttf}
+            $idx++
+            my $r_font=$font->{ttf}
+            my $len=length($$r_font)
+            my $fontfile={Length1=>$len, data=>$r_font}
+            $fontfile->{keylist}=["Length", "Length1"]
+            push @obj_list, $fontfile
+            $fontfile->{index}=$idx
+            $font_descriptor->{FontFile2}="$idx 0 R"
+            push @{$font_descriptor->{keylist}}, "FontFile2"
 
 
 #---------------------------------------- 

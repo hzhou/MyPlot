@@ -43,7 +43,7 @@ fncode: newpage
 
     $page_content=$page->{content}
 
-    $call @page_init
+    $call @on_page_init
 
 subcode: update_page_xobjs
     push @$page_xobjs, $xobj

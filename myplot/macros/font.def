@@ -1,40 +1,32 @@
+include: macros/font_adobe.def
+include: macros/font_afm.def
+include: macros/font_ttf.def
+include: macros/font_cmap.def
+
 #---- fonts ------------------------------------ 
-fncode: find_font($title)
-    $call @check_font_hash
-    my $font=$font_hash{$title}
-    $call @update_page_fonts
+fncode: find_font($title, $name)
+    $global %font_hash
+    $if !$name
+        $name=$title
 
-    my $metric=$font_metrics{$title}
-    $if $metric
-        $foreach $key in "isfixed", "width", "start", "count", "metrics"
-            $if $metric->{$key}
-                $font->{$key}=$metric->{$key}
-    return $font
+    $if !$font_hash{$name}
+        my $n=@font_list
+        $n++
+        my $font={BaseFont=>$name, Name=>"F$n", title=>$name}
+        $call check_specific_fonts
+        push @font_list, $font
+        $font_hash{$name}=$font
 
-    # -----------------
-    subcode: check_font_hash
-        $global %font_hash
-        $if !$font_hash{$title}
-            my $n=@font_list
-            $n++
-            my $font={BaseFont=>$title, Name=>"F$n"}
-            $call check_specific_fonts
-            push @font_list, $font
-            $font_hash{$title}=$font
-
-    subcode: update_page_fonts
-        $if !$page_font_hash{$title}
-            push @$page_fonts, $font
-            $page_font_hash{$title}=1
+    return $font_hash{$name}
 
     # ------------------------------
     subcode:: check_specific_fonts
+        $case $adobe_std_fonts{$title}
+            load_afm($font)
         $case $title =~ /Sim(Sun|Hei)/
             $font->{isfixed}=1
             $font->{width}=1000
             $font->{iswide}=1
-
-    subcode:: check_specific_fonts
         $case $title =~/\.ttf$/i
             load_ttf($font, $title)
 	
@@ -44,17 +36,46 @@ subcode: _autoload
     $global %config
     $config{label_font}="Helvetica"
 
-fncode: set_font($ft, $size)
-    $global $last_font, $last_font_size
-    my $t="$ft->{Name} $size"
-    $if $last_font ne $t
-        $last_font=$t
+subcode:: on_page_init
+    undef $cur_font
+
+fncode: set_font($font, $size)
+    $global $cur_font, $cur_font_title, $cur_font_size
+    $if $cur_font != $font or $cur_font_size ne $size
+        my $title=$font->{title}
+        $if $font ne $cur_font
+            $cur_font=$font
+            $cur_font->{used}=1
+            $call @update_page_fonts, $cur_font
+        my $t="$cur_font->{Name} $size"
         push @$page_content, "/$t Tf"
+        $cur_font_title=$title
+        $cur_font_size=$size
+        $call @on_set_font
+    # ------------------------
+    subcode: update_page_fonts(font)
+        $if !$page_font_hash{$title}
+            push @$page_fonts, $(font)
+            $page_font_hash{$title}=1
 
 
 fncode: text_at($x, $y, $s)
+    $s=~s/([\(\)])/\\\1/g
     push @$page_content, "BT"
     push @$page_content, "$x $y Td"
     push @$page_content, "($s) Tj"
     push @$page_content, "ET"
 
+fncode: unicode_at($x, $y, $s)
+    push @$page_content, "BT"
+    push @$page_content, "$x $y Td"
+    push @$page_content, "<$s> Tj"
+    push @$page_content, "ET"
+
+fncode: text_tm($s, @tm)
+    $s=~s/([\(\)])/\\\1/g
+    push @$page_content, "BT"
+    my $t = sprintf("%.2f %.2f %.2f %.2f %.2f %.2f", @tm)
+    push @$page_content, "$t Tm"
+    push @$page_content, "($s) Tj"
+    push @$page_content, "ET"
