@@ -1,0 +1,159 @@
+page: test, basic_frame, t.pdf
+    $call demo_icon
+    # $call demo_ttf, FontAwesome
+    # $call demo_adobe, Symbol
+    # $call demo_adobe, Times-Roman
+    # $call demo_chinese
+
+subcode: demo_icon
+    my $ft=MyPlot::find_font("../resource/FontAwesome.ttf")
+    $group origin(300, 300)
+        MyPlot::draw_icon($ft, 0xf179, 100)
+        MyPlot::stroke()
+
+subcode: demo_ttf(ttf_file)
+    my $dx = 32
+    my $dy = 40
+    my ($x0, $y0)=(30, 700)
+
+    my $size=25
+    my $ft=MyPlot::find_font("../resource/FontAwesome.ttf", "FontAwesome")
+    my $cmap = $ft->{cmap}
+    my $scale = $size/$ft->{em}
+    my ($cx, $cy)=(0,0)
+    my $widths=$ft->{metrics}
+    my @cells
+    $for $i=0:@$cmap:2
+        $for $code=$cmap->[$i]:$cmap->[$i+1]+1
+            my $cid=MyPlot::get_cid($ft, $code)
+            my $tx=($dx-$widths->[$cid]*$scale)/2
+            push @cells, [$cid, $code, $tx]
+    my $i=0
+    $while $i<@cells
+        $if $i>0
+            MyPlot::newpage()
+        $call draw_title, $(ttf_file)
+        $call draw_cells, 16, 16
+        $call set_font, "Helvetica", 8
+        &call each_cell
+            my $t = sprintf("%04X", $code)
+            MyPlot::text_at($x+10, $y+$dy-10, $t)
+        $i-=256
+        $call set_font, "FontAwesome", $size
+        &call each_cell
+            my $t = sprintf("%04X", $cid)
+            MyPlot::unicode_at($x+$tx, $y+5, $t)
+
+    subcode: each_cell
+        $for $cy=0:16
+            $for $cx=0:16
+                my $x = $x0+($cx*$dx)
+                my $y = $y0-($cy+1)*$dy
+                $if $i<@cells
+                    my $cid = $cells[$i]->[0]
+                    my $code = $cells[$i]->[1]
+                    my $tx = $cells[$i]->[2]
+                    BLOCK
+                $i++
+
+subcode: demo_chinese
+    use utf8
+    $call set_font, "SimSun", 30
+    my $t=MyPlot::encode_utf16BE("周辉, you did it!")
+    MyPlot::unicode_at(100, 100, $t)
+
+subcode: demo_adobe(fontname)
+    my $dx = 32
+    my $dy = 40
+    my ($x0, $y0)=(30, 700)
+    my $x1=$x0+17*$dx
+    my $y1=$y0-15*$dy
+    $call draw_title, $(fontname)
+    $call draw_cells, 15, 17
+    $call draw_labels
+    $call draw_chars
+
+    subcode: draw_labels
+        $call set_font, "Helvetica", 10
+        $for $i=2:16
+            my $x = $x0+10
+            my $y = $y0-($i-1)*$dy-20
+            my $t = sprintf("%X0", $i)
+            MyPlot::text_at($x, $y, $t)
+        $for $i=0:16
+            my $x = $x0+($i+1)*$dx +10
+            my $y = $y0-20
+            my $t = sprintf("%X", $i)
+            MyPlot::text_at($x, $y, $t)
+
+    subcode: draw_chars
+        my $size=30
+        $call set_font, $(fontname), $size
+        my $cmap=$MyPlot::cur_font->{cmap}
+        my $widths=$MyPlot::cur_font->{widths}
+        my $scale=$size/1000.0
+        MyPlot::fill_gray(0.3)
+        my @blank
+        $for $i=2:16
+            $for $j=0:16
+                my $code=$i*16+$j
+                my $x=$x0+($j+1)*$dx
+                my $y=$y0-$i*$dy
+                $if $cmap->[$code]>0
+                    my $idx = $cmap->[$code]
+                    my $t=chr($code)
+                    $if $t=~/[()\\]/
+                        $t="\\".$t
+                    my $cx=($dx-$widths->[$idx]*$scale)/2
+                    MyPlot::text_at($x+$cx, $y+10, $t)
+                $else
+                    push @blank, $x
+                    push @blank, $y
+
+        MyPlot::fill_gray(0.9)
+        $for $i=0:@blank:2
+            MyPlot::rect($blank[$i]+1, $blank[$i+1]+1, $dx-2, $dy-2)
+            MyPlot::fill()
+
+
+#---------------------------------------- 
+subcode: demo_text
+    my $t_a=''
+    $for $i=0:40
+        $t_a.=chr(128+$i)
+    my ($x, $y)=(10, 770)
+    $foreach $t in "Courier", "Helvetica", "Times-Roman" , "Symbol" , "ZapfDingbats"
+        $call set_font, "Helvetica", 9
+        MyPlot::text_at($x, $y, $t);
+        $y-=20;
+        $call set_font, $t, 20
+        MyPlot::text_at($x, $y, " !\"#$%&'\\(\\)*+,-./0123456789:;<=>?@")
+        $y-=25;
+        MyPlot::text_at($x, $y, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")
+        $y-=25;
+        MyPlot::text_at($x, $y, "abcdefghijklmnopqrstuvwxyz")
+        $y-=25;
+        MyPlot::text_at($x, $y, "[\\\\]^_{|}~")
+        $y-=25;
+        MyPlot::text_at($x, $y, $t_a)
+        $y-=25;
+
+
+#---------------------------------------- 
+subcode: draw_title(title)
+    $call set_font, "Helvetica", 20
+    MyPlot::text_at(50, $y0+20, "$(title)")
+
+subcode: draw_cells(row, col)
+    my $x1=$x0+$(col)*$dx
+    my $y1=$y0-$(row)*$dy
+    MyPlot::stroke_gray(0.5)
+    $for $i=0:$(row)+1
+        MyPlot::moveto($x0, $y0-$i*$dy)
+        MyPlot::lineto($x1, $y0-$i*$dy)
+        MyPlot::stroke()
+    $for $i=0:$(col)+1
+        MyPlot::moveto($x0+$i*$dx, $y0)
+        MyPlot::lineto($x0+$i*$dx, $y1)
+        MyPlot::stroke()
+

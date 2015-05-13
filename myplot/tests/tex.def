@@ -1,0 +1,19 @@
+page: test, basic_frame, t.pdf
+    module: plot
+
+    # $tex 30pt
+    $tex 30pt, math
+        \vec\root{3}{x_2} \vec x
+        # \sqrt 2 \sqrt Something \sqrt 12345 \sqrt \pi
+        # \overline Something \underline Something
+        # \hat a \.a \"a \v a \u a \'a \`a \~a \=a \o a
+        # 123, 45
+        # K_n^+, K_n^-
+        # (x+y-z)(x*y/z)(x=+1)
+        # \sin^2\theta
+        # \alpha,\beta,\gamma,\delta;
+        # test example \alpha b_1^2 (x^31415_92+\pi)
+        # x^2 x_2 2^x x^2y^2
+
+subcode: tex(@t)
+    MyPlot::tex("$(t)")
