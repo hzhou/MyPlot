@@ -1,0 +1,29 @@
+#---------------------------------------- 
+#-- input is always in utf8
+
+fncode: encode_utf16BE($t)
+    my @t
+    $for $i=0:length($t)
+        my $c=ord(substr($t, $i, 1))
+        printf "$i: [%x]\n", $c
+        $if $c<=0xffff
+            push @t, sprintf("%04X", $c)
+        $else
+            $c-=0x10000
+            push @t, sprintf("%04X", 0xD800+$c>>10)
+            push @t, sprintf("%04X", 0xDC00+$c&0x3F)
+    return join('', @t)
+        
+subcode: _autoload
+    $global %standard_encoding
+
+fncode: encode_standard($t)
+    my @t
+    $for $i=0:length($t)
+        my $c=ord(substr($t, $i, 1))
+    return join('', @t)
+
+fncode: get_cid($font, $c)
+    # ttf  in macros/font_ttf.def
+    # afm  in macros/font_afm.def
+    $call @get_cid_cases

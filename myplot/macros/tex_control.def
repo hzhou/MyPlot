@@ -1,0 +1,54 @@
+
+subcode:: tex_format_control
+    my $base=$t->[0]->[0]
+    $if $tex_accent{$type}
+        &call format_accent, 0
+            $box->{top} += $box->{ch}
+    $elif $tex_decorate{$type}
+        $if $type eq "root"
+            $base=$t->[0]->[1]
+        &call format_accent, 0
+            $if $type eq "overline"
+                $box->{top} += $box->{ch}/2
+            $elif $type eq "underline"
+                $box->{bottom} -= $box->{ch}/2
+            $elif $type eq "vec"
+                $box->{top} += $box->{ch}
+            $elif $type eq "sqrt" or $type eq "root"
+                $call process_radical
+
+    # -------------------
+    subcode: format_accent(i)
+        my $b = format_tex_internal($base, $s_font, $s_size, $mode)
+        my $box={type=>"accent", accent=>$type, base=>$b}
+        $(for:t in width,top,bottom,italic_adjust)
+            $box->{$(t)}=$b->{$(t)}
+        my $size=get_tex_size($s_size)
+        my $xheight=$size/2
+        $box->{ch}=$xheight*0.5
+
+        BLOCK
+
+        return $box
+        
+    # --------------------------
+    subcode: process_radical
+        $box->{top} += $xheight * 0.5
+        $box->{bottom} -= $xheight * 0.3
+        $box->{cw} = $xheight * 1.5
+        $box->{width} += $box->{cw}+$box->{italic_adjust}
+        $box->{shift_x}=$box->{cw}
+        $box->{shift_x2}=0
+        $box->{shift_y}=$box->{ch}*2
+        $if $type eq "root"
+            my $ss_size=get_script_size($s_size)
+            $ss_size=get_script_size($ss_size)
+            my $b2=format_tex_internal($t->[0]->[0], $s_font, $ss_size, $mode)
+            $box->{power}=$b2
+            $if $b2->{width}>$box->{cw}/2
+                $box->{shift_x2}=$b2->{width}-$box->{cw}/2
+                $box->{width}+=$box->{shift_x2}
+                $box->{shift_x}+=$box->{shift_x2}
+            $if $box->{shift_y}+$box->{bottom}+$b2->{top}-$b2->{bottom}>$box->{top}
+                $box->{top}=$box->{shift_y}+$box->{bottom}+$b2->{top}-$b2->{bottom}
+

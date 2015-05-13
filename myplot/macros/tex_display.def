@@ -1,0 +1,187 @@
+fncode: tex_display($box)
+    my $type = $box->{type}
+    # $print tex_display $box->{type}: $box
+    $call set_xy
+    $if $type eq "list"
+        $call do_list
+    $elif $type eq "NULL"
+        # NOOP
+    $elif $type eq "word"
+        $call do_word
+    $elif $type eq "script"
+        $call do_script
+    $elif $type eq "accent"
+        $call do_accent
+    $elif $type eq "space" or $type eq "op_space"
+        $x += $box->{width}
+    $else
+        $foreach %$box
+            $print "  -- $k: $v"
+        die "Can't display type $type\n"
+
+    # ---------------------------------------- 
+    subcode: set_xy
+        my ($x, $y)
+        $if !defined $box->{x}
+            $if !defined $tex{x0}
+                die "tex_box not defined\n"
+
+            my $dx = (($tex{x1}-$tex{x0})-$box->{width})/2
+            $x = $tex{x0}+$dx
+
+            my $dy = (($tex{y1}-$tex{y0})-($box->{top}-$box->{bottom}))/2
+            $y = $tex{y0}+$dy -$box->{bottom}
+        $else
+            $x = $box->{x}
+            $y = $box->{y}
+
+    # ---------------------------------------- 
+    subcode: do_list
+        # break lines, make pages
+        # assume single line in center mode
+        my $last
+        $foreach $t in @{$box->{list}}
+            $if $last->{italic_adjust} and !$t->{italic_adjust}
+                $x+=$last->{italic_adjust}
+            $t->{x}=$x
+            $t->{y}=$y
+            $x += $t->{width}
+            $last=$t
+
+        $foreach $t in @{$box->{list}}
+            tex_display($t)
+
+    # ---------------------------------------- 
+    subcode: do_word
+        my $ft = $box->{font}
+        $if $ft->{slanted}
+            set_font($ft->{base}, $box->{size})
+            # tand(12) = 0.21255656
+            my $t=$ft->{skew}
+            text_tm($box->{text}, 1,0,$t,1,$x,$y)
+        $else
+            set_font($box->{font}, $box->{size})
+            text_at($x, $y, $box->{text})
+
+    subcode: do_script
+        $(for:b in base,up,down)
+            my $$(b)=$box->{$(b)}
+        $base->{x}=$x
+        $base->{y}=$y
+        tex_display($base)
+        $x+=$base->{width}
+        $if $up
+            $up->{x}=$x
+            $up->{y}=$y+$up->{shift}
+            tex_display($up)
+        $if $down
+            $down->{x}=$x
+            $down->{y}=$y+$down->{shift}
+            tex_display($down)
+
+    subcode: do_accent
+        my $base=$box->{base}
+        $base->{x}=$x+$box->{shift_x}
+        $base->{y}=$y
+        tex_display($base)
+
+        my $accent=$box->{accent}
+        $if $tex_accent_char{$accent}
+            my $c=$tex_accent_char{$accent}
+            my ($w, $t, $b)=tex_size($c, $ft_rm, $cur_font_size)
+            $x = $x + $base->{width}/2 - $w/2
+            $y = $y + $box->{top} - $t
+            $if $base->{italic_adjust}
+                $x+=$base->{italic_adjust}*0.5
+            set_font($ft_rm, $cur_font_size)
+            text_at($x, $y, $c)
+        $elif $accent eq "overline"
+            $call draw_line, overline
+        $elif $accent eq "underline"
+            $call draw_line, underline
+        $elif $accent eq "vec"
+            $call draw_vec
+        $elif $accent eq "sqrt" or $accent eq "root"
+            $call draw_root
+            $if $accent eq "root"
+                my $power=$box->{power}
+                $power->{x}=$x+$box->{shift_x2}+$box->{cw}/2-$power->{width}
+                $power->{y}=$y+$box->{bottom}+$box->{shift_y}
+                tex_display($power)
+
+    subcode: draw_line(type)
+        my $linewidth = $ft_rm->{h_linewidth}*$cur_font_size/$ft_rm->{em}
+        my $w = $base->{width}
+        $(if:type=overline)
+            my $cy = $y + $box->{top}   -$linewidth/2
+        $(else)
+            my $cy = $y + $box->{bottom}+$linewidth/2
+        moveto($x, $cy)
+        lineto($x+$w, $cy)
+        line_width($linewidth)
+        stroke()
+
+    subcode: draw_vec
+        my $linewidth = $ft_rm->{h_linewidth}*$cur_font_size/$ft_rm->{em}*1.2
+        my $w = $base->{width}
+        my $cy = $y + $box->{top} - $box->{ch}/2
+        my $d = $box->{ch}*0.75
+        moveto($x, $cy)
+        lineto($x+$w, $cy)
+        lineto($x+$w-$d, $cy+$d)
+        lineto($x+$w-$d-$linewidth, $cy+$d-$linewidth)
+        lineto($x+$w-$d*0.75, $cy+$linewidth)
+        lineto($x, $cy+$linewidth)
+        fill()
+
+    subcode: draw_root
+        my $linewidth = $ft_rm->{h_linewidth}*$cur_font_size/$ft_rm->{em}*1.5
+        my $dx=$linewidth*3
+        my $cw=$box->{cw}-$dx
+
+        my $x0=$x+$box->{shift_x2}+$dx
+        my $x01=$x0+$cw/3
+        my $x1=$x0+$cw
+        my $x2=$x+$box->{width}
+        my $y0=$y+$box->{bottom}
+        my $y1=$y0+$box->{shift_y}
+        my $y2=$y+$box->{top}
+        moveto($x0-$dx, $y1-$dx)
+        lineto($x0, $y1)
+        # -- down --
+        my $slope=($y1-$y0-$linewidth*1.5)/($x01-$x0)
+        my $dx2=$linewidth*1.5*sqrt($slope**2+1)
+        lineto($x01, $y0+$dx2)
+        $slope= ($y1-($y0+$dx2))/($x01-$x0)
+        # -- up --
+        lineto($x1,$y2)
+        # -- roof --
+        lineto($x2,$y2)
+        my $y=$y2-$linewidth
+        lineto($x2,$y)
+        # -- roof 2 --
+        my $th1=atan2($x1-$x01,$y2-($y0+$dx2))
+        my $th2=(270*$(to_rad)-$th1)/2-90*$(to_rad)
+        my $x=$x1+$linewidth*sin($th2)/cos($th2)
+        lineto($x, $y)
+        # -- down --
+        $x -= ($y-$y0)*sin($th1)/cos($th1)
+        lineto($x, $y0)
+        # -- back up --
+        my $dx2 = ($y1-$y0+$x-$x0)/($slope+1)
+        $x -= $dx2
+        $y  = $y0+$dx2*$slope 
+        $x += $linewidth/2
+        $y -= $linewidth/2*$slope
+        lineto($x, $y)
+        lineto($x0-$dx+$linewidth/2, $y1-$dx-$linewidth/2)
+        close_path()
+        fill()
+
+
+
+
+
+
+
+

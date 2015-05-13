@@ -1,0 +1,92 @@
+subcode:: on_set_font
+    init_tex_font()
+
+subcode:: on_page_init
+    set_tex_box(0,0,$page_width, $page_height)
+
+#---------------------------------------- 
+fncode: init_tex_font($pt_size)
+    $global $ft_rm, $ft_it, $ft_bf, $ft_bi, $ft_tt
+    $global $ft_symbol, $ft_symsl
+    $global $size_T, $size_S, $size_SS
+
+    $if $pt_size
+        $size_T = $pt_size
+    $elif $cur_font_size
+        $size_T = sprintf "%.1f", $cur_font_size
+    $else
+        $size_T = 12
+    $size_S = sprintf "%.1f", $size_T * 0.7
+    $size_SS = sprintf "%.1f", $size_T * 0.5
+
+    $ft_rm = find_font("Times-Roman")
+    $ft_it = find_font("Times-Italic")
+    $ft_bf = find_font("Times-Bold")
+    $ft_bi = find_font("Times-BoldItalic")
+    $ft_tt = find_font("Courier")
+
+    $ft_symbol = find_font("Symbol")
+    my $t=12*$(to_rad)
+    $ft_symsl  = {base=>$ft_symbol, slanted=>12, skew=>sin($t)/cos($t)}
+
+fncode: set_tex_box($x0, $y0, $x1, $y1)
+    $global %tex=(mode=>"text")
+    $(for:x in x0,y0,x1,y1)
+        $tex{$(x)} = $$(x)
+
+fncode: set_tex_mode($mode)
+    $tex{mode}=$mode
+
+fncode: get_tex_font($s_font, $mode)
+    $if !$s_font
+        $if $mode eq "text"
+            return $ft_rm
+        $else
+            return $ft_it
+    $elif $s_font eq "symbol"
+        $if $mode eq "text"
+            return $ft_symbol
+        $else
+            return $ft_symsl
+    $else
+        $if $s_font eq "rm"
+            return $ft_rm
+        $elif $s_font eq "it" or $s_font eq "sl"
+            return $ft_it
+        $elif $s_font eq "bf"
+            return $ft_bf
+        $elif $s_font eq "tt"
+            return $ft_tt
+        $elif $s_font eq "bi"
+            return $ft_bi
+        $else
+            return $ft_rm
+
+fncode: get_tex_size($s_size)
+    $if $s_size eq "S"
+        return $size_S
+    $elif $s_size eq "SS"
+        return $size_SS
+    $else
+        return $size_T
+
+fncode: get_script_size($s_size)
+    $if $s_size eq "T" or $s_size eq "D"
+        return "S"
+    $else
+        return "SS"
+
+
+fncode: get_tex_space($s_size, $type, $non_breakable)
+    my $sp = "sp"
+    $if $non_breakable
+        $sp = "nbsp"
+    my $size=get_tex_size($s_size)
+    $call set, word, /3, /6, /9
+    $call set, op, /3, /6, /3
+    $call set, comma, /3, /4.8, /11.25
+    $call set, sentence, /2.25, /2, /27
+    
+    subcode: set(type, a,b,c)
+        $case $type eq "$(type)"
+            return {type=>$sp, width=>$size$(a), stretch=>$size$(b), shrink=>$size$(c)}

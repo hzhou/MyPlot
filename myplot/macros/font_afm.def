@@ -1,0 +1,112 @@
+
+fncode: load_afm($font)
+    my $afm_dir="/usr/share/fonts/type1"
+    my $title=$font->{BaseFont}
+    my $f_afm = "$afm_dir/$title.afm"
+    $if !-e $f_afm
+        die "Type1 font metric file $f_afm not found!\n"
+
+    $call parse_afm
+    # $call debug_afm
+    $call set_font
+
+    subcode: set_font
+        #- num of glyfs
+        $font->{count}=$count
+        $font->{cmap}=\@cmap
+        $font->{widths}=\@widths
+        $font->{tops}=\@tops
+        $font->{bottoms}=\@bottoms
+        $font->{lig}=\@lig_list
+        $font->{kern}=\@kern_list
+
+        $font->{em}=1000
+        $font->{cid}=0
+
+    # --------------------------------
+    subcode: parse_afm
+        DUMP_STUB parse_afm_var
+        my $fixed=0
+        my ($name, $count, $start)
+        my (@widths, @tops, @bottoms)
+        my (%glyf_name, @lig, @kern)
+        my $flag
+        &call open_r, $f_afm
+            $if /^FontName (\S+)/
+                $name=$1
+            $elif /^IsFixedPitch true/
+                $font->{isfixed}=1
+            $elif /^ItalicAngle -(\S+)/
+                my $t=$1*$(to_rad)
+                $font->{skew}=sin($t)/cos($t)
+            $elif /^StdHW (\d+)/
+                $font->{h_linewidth}=$1
+            $elif /^StdVW (\d+)/
+                $font->{v_linewidth}=$1
+            $elif /^StartCharMetrics (\d+)/
+                $count=$1
+                $flag="metrics"
+            $elif /^EndCharMetrics/
+                $flag=0
+            $elif /^StartKernPairs (\d+)/
+                $flag="kernpairs"
+            $elif /^EndKernPairs/
+                $flag=0
+            $elif /^C\s*(\S+)\s*(.*)/ and $flag eq "metrics"
+                my ($code, $l)=($1, $2)
+                $if $code>0
+                    $call char_cmap
+                    $call parse_char
+            $elif /^KPX (.*)/
+                push @kern, $1
+        DUMP_STUB parse_afm_post
+
+        $call process_ligature
+        $call process_kern
+
+    # -------------------
+    subcode: char_cmap
+        $(block:parse_afm_var)
+            my @cmap
+
+        $cmap[$code]=$code
+
+    subcode: parse_char
+        my ($w, $t, $b, $char_name)
+        $if $l=~/; WX\s+(\d+)/
+            $w=$1
+        $if $l=~/; B\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)/
+            ($t, $b)=($4, $2)
+        $widths[$code]=$w
+        $tops[$code]=$t
+        $bottoms[$code]=$b
+        $if $l=~/; N\s*(\w+)/
+            $char_name=$1
+            $glyf_name{$char_name}=$#widths
+        $while $l=~/\bL\s+(\w+)\s+(\w+)/g
+            push @lig, "$char_name-$1-$2"
+
+    subcode: process_ligature
+        my (@lig_list, @kern_list)
+        $foreach $t in @lig
+            my @t=split /-/, $t
+            my $k=$glyf_name{$t[0]}.'-'.$glyf_name{$t[1]}
+            push @lig_list, "\"$k\"=>\"".$glyf_name{$t[2]}."\""
+
+    subcode: process_kern
+        my @kern_list
+        $foreach $t in @kern
+            my @t=split /\s+/, $t
+            my $k=$glyf_name{$t[0]}.'-'.$glyf_name{$t[1]}
+            push @kern_list, "\"$k\"=>$t[2]"
+
+    # ---------------------------------------- 
+    subcode: debug_afm
+        $print "font: $title:"
+        print "    ", join(",",@cmap), "\n"
+
+
+#---------------------------------------- 
+subcode:: get_cid_cases
+    $case $font->{cid}==0
+        return $font->{cmap}->[ord($c)]

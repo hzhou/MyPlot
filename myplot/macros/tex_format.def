@@ -1,0 +1,150 @@
+fncode: format_tex($t)
+    $if !$ft_rm
+        init_tex_font()
+    return format_tex_internal($t, undef, "T", $tex{mode})
+
+#---------------------------------------- 
+fncode: format_tex_internal($t, $s_font, $s_size, $mode)
+    my $type=$t->[1]
+    # $print format_tex_internal: $type - $s_font - $s_size - $mode
+    $if $type =~/^(text|math|display|eq|equation)$/
+        $mode=$1
+        $t->[1]="list"
+        $type="list"
+
+    $if $type eq "list"
+        $call tex_format_list
+    $elif $type eq "NULL"
+        return {type=>"NULL"}
+    $elif $type eq "word"
+        my $ft=get_tex_font($s_font, $mode)
+        return format_word($t->[0], $ft, get_tex_size($s_size))
+    $elif $type eq "number"
+        my $ft=get_tex_font($s_font, "text")
+        return format_word($t->[0], $ft, get_tex_size($s_size))
+    $elif $type eq "nonword"
+        $call format_nonword
+    $elif $type eq "space"
+        return get_tex_space($s_size, "word")
+    $elif $type eq "control"
+        $call @format_control_word
+    $elif $type eq "/_" or $type eq "/^" or $type eq "^_"
+        $call @tex_format_script
+    $elif substr($type, 0,1) eq "/"
+        $type=substr($type, 1)
+        $call @tex_format_control
+        die "Unrecognized control [$type]\n"
+    $else
+        die "tex type: $type not implemented\n"
+
+    # -------------------------
+    subcode: format_control_word
+        $if $symbol{$t->[0]}
+            my $c = $symbol{$t->[0]}
+            my $ft
+            $if $c=~/[a-zJV]/
+                # italic greek math var
+                $ft=get_tex_font("symbol", $mode)
+            $else
+                $ft=get_tex_font("symbol", "text")
+            my $box= format_word($c, $ft, $size_T)
+            $if $mode ne "text" 
+                $if $mathop{$t->[0]}
+                    $box->{category}="op"
+            return $box
+        $elif $tex_functions{$t->[0]}
+            my $ft=get_tex_font($s_font, "text")
+            return format_word($t->[0], $ft, get_tex_size($s_size))
+        $else
+            die "unrecognized control word $t->[0]\n"
+
+    # -------------------------
+    subcode: format_nonword
+        my $ft=get_tex_font($s_font, "text")
+        my $box=format_word($t->[0], $ft, get_tex_size($s_size))
+        $if $mode ne "text"
+            $if $t->[0] =~/[\(\[\{]/
+                $box->{category}="open"
+            $elif $t->[0] =~/[\)\]\}]/
+                $box->{category}="close"
+        return $box
+
+#---------------------------------------- 
+subcode: tex_format_list
+    $call pre_process_list
+
+    my @tlist 
+    $(for:w in width,stretch,shrink,top,bottom)
+        my $$(w)=0
+
+    $(set:last=$tlist[-1])
+    $(set:type=$t2->[1])
+    $foreach $t2 in @{$t->[0]}
+        $if $(type) eq "NULL"
+            #-- skip --
+        $else
+            my $box=format_tex_internal($t2, $s_font, $s_size, $mode)
+            $call check_binary_op
+            $call accumulate_size
+            push @tlist, $box
+    
+    my $listbox = {type=>"list", list=>\@tlist}
+    $(for:w in width,stretch,shrink,top,bottom)
+        $listbox->{$(w)}=$$(w)
+    return $listbox
+
+    # -----------------
+    macros:
+        is_script: $t2->[1] eq "/^" or $t2->[1] eq "/_"
+        is_sym_op: $mode ne "text" and $sym_op{$t2->[0]}
+
+    subcode: pre_process_list
+        my $last
+        $foreach $t2 in @{$t->[0]}
+            $if $(is_script)
+                $call @tex_preprocess_scripts
+            $elif $(is_sym_op)
+                $t2->[1]="control"
+                $t2->[0]=$sym_op{$t2->[0]}
+            $last=$t2
+
+    # -----------------------
+    subcode: check_binary_op
+        $if $box->{category} eq "op"
+            $if !$(last) or $(last)->{category}=~/open|op/
+                undef $box->{category}
+        $if $(last) and $(last)->{category} eq "op" and $box->{category} ne "close"
+            $call add_op_space
+
+        # ----
+        subcode: add_op_space
+            my $b = pop @tlist
+            my $space=get_tex_size($s_size)/3
+            push @tlist, {type=>"op_space", width=>$space, shrink=>$space, stretch=>$space/2}
+            push @tlist, $b
+            push @tlist, {type=>"op_space", width=>$space, shrink=>$space, stretch=>$space/2}
+            $width+=$space*2
+            $shrink+=$space*2
+            $stretch+=$space
+
+    subcode: accumulate_size
+        $call add, width, $box
+        $call add, stretch, $box
+        $call add, shrink, $box
+        $call max, top, $box
+        $call min, bottom, $box
+
+    # -------------------------
+    subcode: add(var, box)
+        $$(var) += $(box)->{$(var)}
+    subcode: max(var, box)
+        $if $$(var) < $(box)->{$(var)}
+            $$(var) = $(box)->{$(var)}
+    subcode: min(var, box)
+        $if $$(var) > $(box)->{$(var)}
+            $$(var) = $(box)->{$(var)}
+
+
+
+
+

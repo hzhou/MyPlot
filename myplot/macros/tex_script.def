@@ -1,0 +1,121 @@
+
+#---------------------------------------- 
+#- ref from: tex_dimension.def - fncode: format_tex_internal
+#-     from: format_list - pre_process_list
+#-         $t2: cur_ast_node
+#-         $last last_ast_node
+
+subcode: tex_preprocess_scripts
+    $if $t2->[1] eq "/^" and $last->[1] eq "/_"
+        $last->[1]="^_"
+        $last->[0]->[1]=$(p1:$t2)
+        $t2->[1] = "NULL"
+    $elif $t2->[1] eq "/_" and $last->[1] eq "/^"
+        $last->[1]="^_"
+        $last->[0]->[2]=$(p1:$t2)
+        $t2->[1] = "NULL"
+    $else
+        my $base=[]
+        $if $last
+            @$base=@$last
+            $last->[1]="NULL"
+        $else
+            $base=[undef, "NULL"]
+
+        $if $t2->[1] eq "/_"
+            $t2->[0]=[$base, undef, $(p1:$t2)]
+        $else
+            $t2->[0]=[$base, $(p1:$t2), undef]
+
+    # ---- for control param ---------------------
+    macros:
+        p1: $1->[0]->[0]
+        p2: $1->[0]->[1]
+        p3: $1->[0]->[2]
+
+#---------------------------------------- 
+#- ref from: tex_dimension.def - fncode: format_tex_internal
+#-     atom: [base, superscript, subscript]
+
+subcode: tex_format_script
+    my ($p1,$p2,$p3)=@{$t->[0]}
+    $(set:size=get_script_size($s_size))
+    $(set:format1=format_tex_internal($1,$s_font, $s_size, $mode))
+    $(set:format2=format_tex_internal($1,$s_font, $(size), $mode))
+
+    my $size=get_tex_size($s_size)
+    my $xheight=$size/2
+    my $drop=$xheight*2/5
+    #-- minimum super raise depending on mode
+    my $sup=$xheight*4/5
+    my $sub1 = $xheight*2/5
+    my $sub2 = $xheight*3/5
+
+    my ($b1, $b2, $b3)
+    my $w=0
+
+    #-- script width
+    $if $p2
+        $b2=$(format2:$p2)
+        $if $w<$b2->{width}
+            $w=$b2->{width}
+    $if $p3
+        $b3=$(format2:$p3)
+        $if $w<$b3->{width}
+            $w=$b3->{width}
+
+    #-- add base width
+    my ($t, $b)
+    $if $p1
+        $b1=$(format1:$p1)
+        $if $b1->{italic_adjust}
+            $b1->{width}+=$b1->{italic_adjust}
+        $w+=$b1->{width}
+        $t=$b1->{top}
+        $b=$b1->{bottom}
+    $else
+        $t=$xheight
+        $b=0
+
+    my ($shift_up, $shift_down)
+    $if $p2
+        $call shift_up
+    $if $p3
+        $call shift_down
+    $if $p2 and $p3
+        $call shift_both
+
+    $if $p2
+        $b2->{shift}=$shift_up
+        $t=$shift_up+$b2->{top}
+    $if $p3
+        $b3->{shift}=$shift_down
+        $b=$shift_down+$b3->{bottom}
+
+    return  {type=>"script", base=>$b1, up=>$b2, down=>$b3, width=>$w, top=>$t, bottom=>$b}
+
+    # -----------------
+    subcode: shift_up
+        $shift_up = $t-$drop
+        $if $shift_up<$sup
+            $shift_up=$sup
+        $if $shift_up<$xheight/4
+            $shift_up=$xheight/4
+
+    subcode: shift_down
+        $if !$p2
+            $shift_down = $b-$sub1
+        $else
+            $shift_down = $b-$sub2
+        $if $shift_down+$b3->{height} > $xheight *4/5
+            $shift_down=$xheight*4/5-$b3->{height}
+
+    subcode: shift_both
+        $(set:upbot=($shift_up+$b2->{bottom}))
+        $(set:dntop=($shift_down+$b2->{top}))
+        $if ($(upbot)-$(dntop))<$xheight/10
+            $shift_down-= $xheight/10-($(upbot)-$(dntop))
+        $if $(upbot)<$xheight*4/5
+            my $t=$xheight*4/5-$(upbot)
+            $shift_down+=$t
+            $shift_up+=$t
