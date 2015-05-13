@@ -1,9 +1,35 @@
-fncode: tex_display($box)
+#----------------------------------------------- 
+fncode: tex_display_vlist($vlist, $x, $y)
+    my $tlist = $vlist->{list}
+    $foreach $t in @$tlist
+        $if $t->{type} eq "skip"
+            $y-=$t->{top}
+        $elif ref($t->{list}) eq "ARRAY"
+            $y -= $t->{top}
+            tex_display_hlist($t->{list}, $x, $y)
+            $y += $t->{bottom}
+        $else
+            die "tex_display_vlist: unhandled type: $t->{type}\n"
+
+fncode: tex_display_hlist($hlist, $x, $y)
+    my $tlist = $hlist->{list}
+    my $last
+    $foreach $t in @$tlist
+        $if $last->{italic_adjust} and !$t->{italic_adjust}
+            $x+=$last->{italic_adjust}
+        tex_display($t, $x, $y)
+        $x += $t->{width}
+        $last=$t
+
+#----------------------------------------------- 
+fncode: tex_display($box, $x, $y)
     my $type = $box->{type}
     # $print tex_display $box->{type}: $box
-    $call set_xy
-    $if $type eq "list"
-        $call do_list
+    # $call set_xy
+    $if $type eq "hlist" or $type eq "list"
+        tex_display_hlist($box, $x, $y)
+    $elif $type eq "vlist"
+        tex_display_vlist($box, $x, $y)
     $elif $type eq "NULL"
         # NOOP
     $elif $type eq "word"
@@ -12,7 +38,7 @@ fncode: tex_display($box)
         $call do_script
     $elif $type eq "accent"
         $call do_accent
-    $elif $type eq "space" or $type eq "op_space"
+    $elif $type eq "sp" or $type eq "nbsp"
         $x += $box->{width}
     $else
         $foreach %$box
@@ -178,6 +204,54 @@ fncode: tex_display($box)
         close_path()
         fill()
 
+
+# --------------------------------------
+fncode: tex_set_v_glue($vlist, $height)
+    my $tlist = $vlist->{list}
+    my $h=0
+    my $stretch=0
+    my $shrink=0
+    $foreach $t in @$tlist
+        $h += $t->{top}-$t->{height}
+        $stretch += $t->{vstretch}
+        $shrink  += $t->{vshrink}
+
+    $if $height>$h
+        $if $stretch>0
+            my $glue = ($height-$h)/$stretch
+            $foreach $t in @$tlist
+                $if $t->{vstretch}
+                    $t->{top}+=$t->{vstretch}*$glue
+    $elif $height<$h
+        $if $shrink >0
+            my $glue = ($h-$height)/$shrink
+            $foreach $t in @$tlist
+                $if $t->{vshrink}
+                    $t->{top}-=$t->{vshrink}*$glue
+        
+
+fncode: tex_set_h_glue($hlist, $width)
+    my $tlist = $hlist->{list}
+    my $w=0
+    my $stretch=0
+    my $shrink=0
+    $foreach $t in @$tlist
+        $h += $t->{width}
+        $stretch += $t->{stretch}
+        $shrink  += $t->{shrink}
+
+    $if $width>$w
+        $if $stretch>0
+            my $glue = ($width-$w)/$stretch
+            $foreach $t in @$tlist
+                $if $t->{stretch}
+                    $t->{width}+=$t->{stretch}*$glue
+    $elif $width<$w
+        $if $shrink >0
+            my $glue = ($w-$width)/$shrink
+            $foreach $t in @$tlist
+                $if $t->{shrink}
+                    $t->{width}-=$t->{shrink}*$glue
 
 
 
