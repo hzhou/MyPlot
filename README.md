@@ -21,7 +21,7 @@ page: test, basic_frame, t.pdf
     $set_point i=0:4, j=0:4, u=100
         zij=(i*u,j*u)
     #---- CSS type of styling ----
-    $group origin (200, 300), 10pt, gray
+    $group origin (10, 300), 10pt, gray
         #---- standard MyDef macros ----
         $(for:i in 0,1,2)
             $(for:j in 0,1,2)
@@ -30,6 +30,9 @@ page: test, basic_frame, t.pdf
         $line 2, black
         #---- metafont line syntax ----
         $draw z22--z00--z03--z30--z00
+
+    $group origin (350, 320), 4pt, blue
+        $draw z00..z01..z21..z20..z10..cycle
 ```
 
 ```
@@ -39,7 +42,7 @@ PAGE: test
    --> t.pdf
 
 ```
-![9 dots](9dots.png)
+![9 dots](docs/9dots.png)
 
 Explore output_plot/tests/ for more.
 
@@ -96,4 +99,4 @@ subcode: each_char(s)
         BLOCK
 ```
 
-![sierpinski](sierpinski.png)
+![sierpinski](docs/sierpinski.png)

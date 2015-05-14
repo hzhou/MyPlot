@@ -74,7 +74,7 @@ subcode: tex_format_list
     $call pre_process_list
 
     my @tlist 
-    $(for:w in width,stretch,shrink,top,bottom)
+    $(for:w in width,plus,minus,top,bottom)
         my $$(w)=0
 
     $(set:last=$tlist[-1])
@@ -89,7 +89,7 @@ subcode: tex_format_list
             push @tlist, $box
     
     my $listbox = {type=>"list", list=>\@tlist}
-    $(for:w in width,stretch,shrink,top,bottom)
+    $(for:w in width,plus,minus,top,bottom)
         $listbox->{$(w)}=$$(w)
     return $listbox
 
@@ -120,17 +120,18 @@ subcode: tex_format_list
         subcode: add_op_space
             my $b = pop @tlist
             my $space=get_tex_size($s_size)/3
-            push @tlist, {type=>"op_space", width=>$space, shrink=>$space, stretch=>$space/2}
+            my $op_space=get_tex_space($s_size, "op")
+            push @tlist, $op_space
             push @tlist, $b
-            push @tlist, {type=>"op_space", width=>$space, shrink=>$space, stretch=>$space/2}
-            $width+=$space*2
-            $shrink+=$space*2
-            $stretch+=$space
+            push @tlist, $op_space
+            $width+=$op_space->{width}*2
+            $plus+=$op_space->{plus}*2
+            $minus+=$op_space->{minus}*2
 
     subcode: accumulate_size
         $call add, width, $box
-        $call add, stretch, $box
-        $call add, shrink, $box
+        $call add, plus, $box
+        $call add, minus, $box
         $call max, top, $box
         $call min, bottom, $box
 

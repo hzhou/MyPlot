@@ -89,4 +89,4 @@ fncode: get_tex_space($s_size, $type, $non_breakable)
     
     subcode: set(type, a,b,c)
         $case $type eq "$(type)"
-            return {type=>$sp, width=>$size$(a), stretch=>$size$(b), shrink=>$size$(c)}
+            return {type=>$sp, width=>$size$(a), plus=>$size$(b), minus=>$size$(c)}

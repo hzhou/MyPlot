@@ -46,38 +46,6 @@ fncode: tex_display($box, $x, $y)
         die "Can't display type $type\n"
 
     # ---------------------------------------- 
-    subcode: set_xy
-        my ($x, $y)
-        $if !defined $box->{x}
-            $if !defined $tex{x0}
-                die "tex_box not defined\n"
-
-            my $dx = (($tex{x1}-$tex{x0})-$box->{width})/2
-            $x = $tex{x0}+$dx
-
-            my $dy = (($tex{y1}-$tex{y0})-($box->{top}-$box->{bottom}))/2
-            $y = $tex{y0}+$dy -$box->{bottom}
-        $else
-            $x = $box->{x}
-            $y = $box->{y}
-
-    # ---------------------------------------- 
-    subcode: do_list
-        # break lines, make pages
-        # assume single line in center mode
-        my $last
-        $foreach $t in @{$box->{list}}
-            $if $last->{italic_adjust} and !$t->{italic_adjust}
-                $x+=$last->{italic_adjust}
-            $t->{x}=$x
-            $t->{y}=$y
-            $x += $t->{width}
-            $last=$t
-
-        $foreach $t in @{$box->{list}}
-            tex_display($t)
-
-    # ---------------------------------------- 
     subcode: do_word
         my $ft = $box->{font}
         $if $ft->{slanted}
@@ -92,24 +60,16 @@ fncode: tex_display($box, $x, $y)
     subcode: do_script
         $(for:b in base,up,down)
             my $$(b)=$box->{$(b)}
-        $base->{x}=$x
-        $base->{y}=$y
-        tex_display($base)
+        tex_display($base, $x, $y)
         $x+=$base->{width}
         $if $up
-            $up->{x}=$x
-            $up->{y}=$y+$up->{shift}
-            tex_display($up)
+            tex_display($up, $x, $y+$up->{shift})
         $if $down
-            $down->{x}=$x
-            $down->{y}=$y+$down->{shift}
-            tex_display($down)
+            tex_display($down, $x, $y+$down->{shift})
 
     subcode: do_accent
         my $base=$box->{base}
-        $base->{x}=$x+$box->{shift_x}
-        $base->{y}=$y
-        tex_display($base)
+        tex_display($base, $x+$box->{shift_x}, $y)
 
         my $accent=$box->{accent}
         $if $tex_accent_char{$accent}
@@ -131,9 +91,9 @@ fncode: tex_display($box, $x, $y)
             $call draw_root
             $if $accent eq "root"
                 my $power=$box->{power}
-                $power->{x}=$x+$box->{shift_x2}+$box->{cw}/2-$power->{width}
-                $power->{y}=$y+$box->{bottom}+$box->{shift_y}
-                tex_display($power)
+                my $tx =$x+$box->{shift_x2}+$box->{cw}/2-$power->{width}
+                my $ty =$y+$box->{bottom}+$box->{shift_y}
+                tex_display($power, $tx, $ty)
 
     subcode: draw_line(type)
         my $linewidth = $ft_rm->{h_linewidth}*$cur_font_size/$ft_rm->{em}
@@ -207,53 +167,57 @@ fncode: tex_display($box, $x, $y)
 
 # --------------------------------------
 fncode: tex_set_v_glue($vlist, $height)
-    my $tlist = $vlist->{list}
-    my $h=0
-    my $stretch=0
-    my $shrink=0
-    $foreach $t in @$tlist
-        $h += $t->{top}-$t->{height}
-        $stretch += $t->{vstretch}
-        $shrink  += $t->{vshrink}
-
-    $if $height>$h
-        $if $stretch>0
-            my $glue = ($height-$h)/$stretch
-            $foreach $t in @$tlist
-                $if $t->{vstretch}
-                    $t->{top}+=$t->{vstretch}*$glue
-    $elif $height<$h
-        $if $shrink >0
-            my $glue = ($h-$height)/$shrink
-            $foreach $t in @$tlist
-                $if $t->{vshrink}
-                    $t->{top}-=$t->{vshrink}*$glue
+    $call tex_set_glue, v
         
 
 fncode: tex_set_h_glue($hlist, $width)
-    my $tlist = $hlist->{list}
-    my $w=0
-    my $stretch=0
-    my $shrink=0
-    $foreach $t in @$tlist
-        $h += $t->{width}
-        $stretch += $t->{stretch}
-        $shrink  += $t->{shrink}
+    $call tex_set_glue, h
 
-    $if $width>$w
-        $if $stretch>0
-            my $glue = ($width-$w)/$stretch
+subcode: tex_set_glue(type)
+    $(if:type=v)
+        $(set:box=$vlist)
+        $(set:add=$t->{top}-$t->{height})
+        $(set:dim=$height)
+        $(set:width=top)
+    $(else)
+        $(set:box=$hlist)
+        $(set:add=$t->{width})
+        $(set:dim=$width)
+        $(set:width=width)
+    my $tlist = $(box)->{list}
+
+    $call sum_total
+    $if $(dim)>$sum
+        $call set_stretch
+    $elif $(dim)<$sum
+        $call set_shrink
+
+    # ----------------------
+    subcode: sum_total
+        my $sum=0
+        my $plus=0
+        my $minus=0
+        $foreach $t in @$tlist
+            $sum += $(add)
+            $plus += $t->{plus}
+            $minus  += $t->{minus}
+
+    # ----------------------
+    # check {glue} incase certain spaces are repeated references
+    subcode: set_stretch
+        $if $plus>0
+            my $glue = ($(dim)-$sum)/$plus
             $foreach $t in @$tlist
-                $if $t->{stretch}
-                    $t->{width}+=$t->{stretch}*$glue
-    $elif $width<$w
-        $if $shrink >0
-            my $glue = ($w-$width)/$shrink
+                $if $t->{plus} and !$t->{glue}
+                    $t->{$(width)}+=$t->{plus}*$glue
+                    $t->{glue}=$glue
+    subcode: set_shrink
+        $if $minus >0
+            my $glue = ($sum-$(dim))/$minus
             $foreach $t in @$tlist
-                $if $t->{shrink}
-                    $t->{width}-=$t->{shrink}*$glue
-
-
+                $if $t->{minus} and !$t->{glue}
+                    $t->{$(width)}-=$t->{minus}*$glue
+                    $t->{glue}= -$glue
 
 
 

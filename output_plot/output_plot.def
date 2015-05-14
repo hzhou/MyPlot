@@ -77,11 +77,14 @@ subcode:: on_callback
         my @tlist=MyDef::utils::proper_split /,\s*/, $param
         my $pt_size=12
         my $mode="text"
+        my ($x, $y)
         $foreach $t in @tlist
             $if $t=~/^(\d+)(pt)?$/
                 $pt_size=$1
             $elif $t=~/^(math)$/
-                $call Plot, set_tex_mode('math')
+                $mode=$1
+            $elif $t=~/^at\s*\((\S+),\s*(\S+)\)$/
+                ($x, $y)=($1, $2)
         $call Plot, init_tex_font($pt_size)
 
     # ---------------
@@ -91,19 +94,23 @@ subcode:: on_callback
         $while $codelist->[0]=~/^SOURCE/
             shift @$codelist
 
+        my $src
         $if @$codelist==1
             my $t=$codelist->[0]
             $t=~s/\\/\\\\/g
             $t=~s/'/\\'/g
-            $call Plot, tex('$t')
+            $src="'$t'"
         $else
-            $call Plot, tex <<'HERE'
+            push @$out, "my \$tex_src= <<'HERE'"
             push @$out, "PUSHDENT"
             $foreach $t in @$codelist
                 $if $t!~/^SOURCE/
                     push @$out, $t
             push @$out, "HERE"
             push @$out, "POPDENT"
+            $src = '$tex_src'
+        push @$out, "my \$tex = MyPlot::format_tex(MyPlot::parse_tex($src, \"$mode\"));"
+        $call Plot, tex_display(\$tex, $x, $y)
 
 #---- label ------------------------------------ 
 subcode:: parse_func

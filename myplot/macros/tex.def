@@ -27,6 +27,7 @@ fncode: parse_tex($l, $mode)
         print_token($stack[-1])
 
     subcode: match
+        #---------------------------------------- 
         $call brace
         &call if_lex, \\([\\_^&{}])
             $cur = [$1, "nonword"]
@@ -34,19 +35,20 @@ fncode: parse_tex($l, $mode)
             $cur = [$1, "control"]
             $call @skip_1_space
             $call @check_grab
+        #---------------------------------------- 
         $elif $mode eq "text"
             $call token, space, \s+
             &call if_lex, \$(.*?)\$
                 $cur = parse_tex($1, "math")
             $else
                 $mode="error"
+        #---------------------------------------- 
         $elif $mode
-            #-- math mode ----
             $call symbol, [_^&]
             $call token, number, [0-9.]+
             $call token, word, [a-zA-Z0-9]+
             $call token, nonword, [\+\-\*()\[\]!?,:;<=>\/]
-            # $call token, linebreak, \n
+            $call token, linebreak, \n
             $call skip, \s+
             $else
                 $mode="error"

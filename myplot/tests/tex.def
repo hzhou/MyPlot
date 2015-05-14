@@ -2,8 +2,8 @@ page: test, basic_frame, t.pdf
     module: plot
 
     # $tex 30pt
-    $tex 30pt, math
-        \vec\root{3}{x_2} \vec x
+    $tex 30pt, math, at (20, 500)
+        \vec\root{3}{x_2}+\vec x
         # \sqrt 2 \sqrt Something \sqrt 12345 \sqrt \pi
         # \overline Something \underline Something
         # \hat a \.a \"a \v a \u a \'a \`a \~a \=a \o a
