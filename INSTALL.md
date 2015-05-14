@@ -4,7 +4,7 @@ MyDef is a general meta-layer for programming.
 
 1. download
 
-    $ git clone https://github.com/hzhou/MyDef.git
+        $ git clone https://github.com/hzhou/MyDef.git
 
 2. set up environment variables
 
